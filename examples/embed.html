@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zeus Trace Widget — Embed Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Host page</h1>
+  <p>This page simulates a host app that embeds the Zeus trace widget.</p>
+  <button type="button" id="run-trace">Simulate search + trace</button>
+  <button type="button" id="early-trace">Early appendTraceCard (queued)</button>
+
+  <script>
+    window.ZeusTraceConfig = {
+      zeusApiUrl: "http://localhost:8080",
+      zeusAuthToken: "",
+    };
+
+    // Simulate early call before script finishes loading
+    window.appendTraceCard("early queued query", {
+      chat_id: "demo-chat-1",
+      api_version: "v2",
+      target: "demo",
+      answer: "Early answer",
+      trace: {
+        rounds: 1,
+        total_ms: 420,
+        spans: [
+          { name: "llm.round1", cls: "ai", at: 0, ms: 180 },
+          { name: "tool.search", cls: "tool", at: 180, ms: 240 },
+        ],
+        steps: [
+          { type: "llm", round: 1, ms: 180, finish_reason: "tool_calls", tool_calls: ["search"] },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 240, bytes: 4096 },
+        ],
+        ai_requests: [{ model: "gpt-4o-mini" }],
+        tool_calls: [{ name: "search", status: 200 }],
+      },
+    });
+  </script>
+  <script src="/dist/zeus_client_chat_trace.js" async></script>
+  <script>
+    const fixture = {
+      chat_id: "demo-chat-1",
+      api_version: "v2",
+      target: "demo",
+      answer: "Paris is lovely in spring.",
+      trace: {
+        rounds: 2,
+        total_ms: 1250,
+        spans: [
+          { name: "llm.round1", cls: "ai", at: 0, ms: 320 },
+          { name: "tool.search", cls: "tool", at: 320, ms: 410 },
+          { name: "llm.round2", cls: "ai", at: 730, ms: 280 },
+          { name: "tool.pipeline", cls: "tool", at: 1010, ms: 240 },
+        ],
+        steps: [
+          { type: "llm", round: 1, ms: 320, finish_reason: "tool_calls", tool_calls: ["search"], usage: { total_tokens: 120 } },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 410, bytes: 8192 },
+          { type: "llm", round: 2, ms: 280, finish_reason: "stop", usage: { total_tokens: 95 } },
+          { type: "tool", round: 2, name: "pipeline", status: 200, ms: 240, bytes: 2048,
+            args: { steps: [{ name: "summarize", verb: "summarize" }] },
+            pipeline_step_costs: [{ as: "summarize", ms: 240, status: 200 }] },
+        ],
+        ai_requests: [{ model: "gpt-4o-mini", messages: 2 }],
+        tool_calls: [{ name: "search" }, { name: "pipeline" }],
+      },
+    };
+
+    document.getElementById("run-trace").addEventListener("click", async () => {
+      await window.ZeusTrace?.ready;
+      window.appendTraceCard("Best destinations in France?", fixture);
+      window.openDebugPanel?.();
+    });
+
+    document.getElementById("early-trace").addEventListener("click", async () => {
+      await window.ZeusTrace?.ready;
+      window.openDebugPanel?.();
+    });
+  </script>
+</body>
+</html>

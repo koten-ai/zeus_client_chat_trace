@@ -1,0 +1,7 @@
+# Grok build artifacts
+mcps/
+terminals/
+
+node_modules/
+dist/
+.env

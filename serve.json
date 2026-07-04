@@ -1,0 +1,12 @@
+{
+  "cleanUrls": false,
+  "rewrites": [
+    { "source": "/embed.html", "destination": "/examples/embed.html" }
+  ],
+  "unlisted": [
+    "node_modules",
+    "src",
+    "coverage",
+    ".git"
+  ]
+}
