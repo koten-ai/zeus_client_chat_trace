@@ -19,6 +19,90 @@ When a host application calls the Zeus search API, the response includes a `trac
 
 The widget does **not** perform searches itself. The host app is responsible for calling Zeus and passing the response to `appendTraceCard`.
 
+## Chat trace flow
+
+The widget sits beside your chat UI as a passive observer. Your app owns the conversation and the Zeus API call; the widget only receives the response and renders the `trace` payload.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Host as Host app
+    participant Zeus as Zeus API
+    participant Widget as Trace widget
+
+    Note over Host,Widget: Setup (once per page load)
+    Host->>Widget: Set ZeusTraceConfig (optional)
+    Host->>Widget: Load zeus_client_chat_trace.js (async)
+    Widget->>Widget: Install early-call queue
+    Widget->>Widget: Mount Shadow DOM panel + toggle
+    Widget->>Widget: Resolve config, fetch /api/tool-order
+    Widget->>Widget: Drain queued appendTraceCard / openDebugPanel calls
+    Widget-->>Host: ZeusTrace.ready resolves
+
+    Note over User,Zeus: Each chat turn
+    User->>Host: Send message / search query
+    Host->>Zeus: POST search (question, session, etc.)
+    Zeus-->>Host: Response JSON (answer + trace)
+    Host->>Widget: appendTraceCard(question, responseJson)
+    Widget->>Widget: Build trace card (metrics, waterfall, charts, dumps)
+    opt User opens panel
+        Host->>Widget: openDebugPanel()
+        User->>Widget: Toggle button (bottom-right)
+    end
+```
+
+### Phases
+
+**1. Embed and bootstrap**
+
+1. The host page optionally sets `window.ZeusTraceConfig` (or `data-*` attributes on the script tag).
+2. The async bundle loads. Before mount completes, `appendTraceCard` and `openDebugPanel` are stubbed to push into an **early-call queue** so nothing is lost.
+3. On `DOMContentLoaded`, `bootstrap.js` creates `#zeus-trace-host`, attaches an open Shadow DOM, injects DaisyUI + widget markup/styles, and calls `initZeusTrace`.
+4. Config is resolved (`ZeusTraceConfig` → script `data-*` → build-time `.env` defaults). If `zeusApiUrl` is set, the widget fetches `/api/tool-order` to order tool-frequency bars.
+5. The queue is drained, globals are replaced with real implementations, and `window.ZeusTrace.ready` resolves.
+
+**2. Search (host responsibility)**
+
+The widget never calls Zeus search. For each user turn, the host app:
+
+1. Sends the user's question to the Zeus search endpoint.
+2. Receives a JSON body that includes `answer` and a `trace` object (rounds, spans, steps, `ai_requests`, `tool_calls`, optional session/contract metadata).
+
+**3. Ingest trace (`appendTraceCard`)**
+
+When the host calls `appendTraceCard(question, responseJson)`:
+
+| Step | What happens |
+|------|----------------|
+| Validate | Returns early if `responseJson.trace` is missing |
+| Session | Updates `chat_id` and appends to the in-memory trace session |
+| Card header | Turn number, query, API version, target, round count, session/contract badges |
+| Metrics bar | AI vs Zeus vs other time, tokens, bytes; running total across turns |
+| Waterfall | Span timeline from `trace.spans`; `tool.pipeline` steps expand into sub-spans |
+| Tool chart | Frequency bars from `trace.steps`, ordered by `/api/tool-order` when available |
+| Text dump | Collapsible "Hash Traces" step summary |
+| JSON dumps | Lazy-loaded jsnview trees for AI requests, tool calls, and the raw turn bundle |
+| Retention | Keeps the latest 12 cards; older cards roll off the list |
+
+**4. User interaction**
+
+- The floating toggle (bottom-right) opens/closes the panel without host code.
+- `openDebugPanel()` lets the host surface the panel immediately after a search.
+- **Copy all** exports the current session (`chat_id` + trace entries) as JSON to the clipboard.
+
+### Data path (one turn)
+
+```
+User query
+    → Host app → Zeus search API
+        → responseJson { answer, trace: { spans, steps, ai_requests, tool_calls, ... } }
+            → appendTraceCard(question, responseJson)
+                → Shadow DOM trace card (#1, #2, …)
+                    → metrics · waterfall · tool chart · JSON dumps
+```
+
+See `examples/embed.html` for a working host that queues an early trace, then appends fixture data on button click.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 18 or later
