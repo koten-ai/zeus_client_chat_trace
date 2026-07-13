@@ -13,7 +13,7 @@ When a host application calls the Zeus search API, the response includes a `trac
 - **Performance metrics** — Stacked bar showing AI vs Zeus vs other time, plus token and byte totals. A running total aggregates across turns.
 - **Waterfall timeline** — Visual span chart for LLM and tool execution, with pipeline steps expanded inline.
 - **Tool-call frequency chart** — Bar chart ordered by the Zeus `/api/tool-order` endpoint (falls back gracefully when the API is unreachable).
-- **JSON dumps** — Collapsible sections for AI requests, tool calls, and the raw turn bundle. Uses [jsnview](https://www.npmjs.com/package/jsnview) (lazy-loaded from CDN) with a plain-text fallback.
+- **JSON dumps** — Collapsible sections for AI requests/responses (by round), tool calls, and the raw turn bundle. Uses [jsnview](https://www.npmjs.com/package/jsnview) (lazy-loaded from CDN `index.min.js`) with a plain-text fallback.
 - **Early-call queue** — Calls to `appendTraceCard` or `openDebugPanel` made before the script finishes loading are buffered and replayed automatically.
 - **Copy all** — Export the current trace session to the clipboard as JSON.
 
@@ -35,7 +35,7 @@ sequenceDiagram
     Host->>Widget: Load zeus_client_chat_trace.js (async)
     Widget->>Widget: Install early-call queue
     Widget->>Widget: Mount Shadow DOM panel + toggle
-    Widget->>Widget: Resolve config, fetch /api/tool-order
+    Widget->>Widget: Resolve config; background /api/tool-order (optional)
     Widget->>Widget: Drain queued appendTraceCard / openDebugPanel calls
     Widget-->>Host: ZeusTrace.ready resolves
 
@@ -57,9 +57,9 @@ sequenceDiagram
 
 1. The host page optionally sets `window.ZeusTraceConfig` (or `data-*` attributes on the script tag).
 2. The async bundle loads. Before mount completes, `appendTraceCard` and `openDebugPanel` are stubbed to push into an **early-call queue** so nothing is lost.
-3. On `DOMContentLoaded`, `bootstrap.js` creates `#zeus-trace-host`, attaches an open Shadow DOM, injects DaisyUI + widget markup/styles, and calls `initZeusTrace`.
-4. Config is resolved (`ZeusTraceConfig` → script `data-*` → build-time `.env` defaults). If `zeusApiUrl` is set, the widget fetches `/api/tool-order` to order tool-frequency bars.
-5. The queue is drained, globals are replaced with real implementations, and `window.ZeusTrace.ready` resolves.
+3. On `DOMContentLoaded`, `bootstrap.js` creates `#zeus-trace-host`, attaches an open Shadow DOM, injects DaisyUI + widget markup/styles, calls `initZeusTrace`, installs globals, and drains the early-call queue. `ZeusTrace.ready` resolves at this point.
+4. Config is resolved (`ZeusTraceConfig` → script `data-*` → build-time `.env` defaults). If `toolOrder` is injected it is used immediately; otherwise, when `zeusApiUrl` is set, the widget **best-effort** fetches `/api/tool-order` (3s timeout) in the background to order tool-frequency bars. This fetch never blocks the widget or `appendTraceCard`.
+5. Host calls continue to work even if tool-order is slow, fails, or hangs.
 
 **2. Search (host responsibility)**
 
@@ -81,7 +81,8 @@ When the host calls `appendTraceCard(question, responseJson)`:
 | Waterfall | Span timeline from `trace.spans`; `tool.pipeline` steps expand into sub-spans |
 | Tool chart | Frequency bars from `trace.steps`, ordered by `/api/tool-order` when available |
 | Text dump | Collapsible "Hash Traces" step summary |
-| JSON dumps | Lazy-loaded jsnview trees for AI requests, tool calls, and the raw turn bundle |
+| Hash Traces | Round-by-round `[rN] LLM` / `[rN] TOOL` lines from `trace.steps` (falls back to `tool_calls`) |
+| JSON dumps | Lazy-loaded jsnview trees for AI requests/responses, tool calls, and the raw turn bundle |
 | Retention | Keeps the latest 12 cards; older cards roll off the list |
 
 **4. User interaction**
@@ -259,8 +260,11 @@ examples/
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Tool frequency chart has no canonical order | `zeusApiUrl` unset or `/api/tool-order` unreachable | Set `ZeusTraceConfig.zeusApiUrl`; check Network tab |
+| Tool frequency chart has no canonical order | `zeusApiUrl` unset, `/api/tool-order` unreachable, or only `toolOrder.v1` filled while turns are v2 | Inject `ZeusTraceConfig.toolOrder`, or set a same-origin `zeusApiUrl`; check Network tab |
+| Widget toggle present but no cards after search | Host never called `appendTraceCard`, or payload missing `trace` | Call `appendTraceCard(query, data)` with `data.trace` |
+| Panel not visible | Panel starts closed (`is-hidden`) | Click the lightning toggle (bottom-left) or call `openDebugPanel()` |
 | JSON dumps show plain `<pre>` instead of tree viewer | jsnview CDN blocked | Allow `cdn.jsdelivr.net`, or rely on the text fallback |
+| No tool-call rounds / dumps never appear | Stale bundle with broken jsnview URL hanging load | Redeploy rebuilt `dist/zeus_client_chat_trace.js` |
 | Widget styles missing | DaisyUI CDN blocked | Allow `cdn.jsdelivr.net` |
 | Early `appendTraceCard` calls lost | Custom stub overwrote the queue | Use the built bundle as-is; it installs the queue before mount |
 

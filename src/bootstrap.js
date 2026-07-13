@@ -49,8 +49,9 @@ function mountWidget() {
 
   shadow.append(daisyLink, style, themeRoot);
 
+  // Install APIs immediately. tool-order is best-effort chart metadata and must
+  // never gate the floating widget or early-queue drain (fetch can hang/CORS).
   const api = initZeusTrace(themeRoot, config);
-
   window.appendTraceCard = api.appendTraceCard;
   window.openDebugPanel = api.openDebugPanel;
   drainQueue(api);

@@ -17,6 +17,7 @@ describe("resolveConfig", () => {
     expect(resolveConfig()).toEqual({
       zeusApiUrl: "https://zeus.example.com",
       zeusAuthToken: "secret",
+      toolOrder: null,
     });
   });
 
@@ -31,6 +32,7 @@ describe("resolveConfig", () => {
     expect(resolveConfig()).toEqual({
       zeusApiUrl: "https://api.test",
       zeusAuthToken: "dataset-token",
+      toolOrder: null,
     });
   });
 
@@ -43,14 +45,44 @@ describe("resolveConfig", () => {
   });
 
   it("returns empty strings when unset", () => {
-    expect(resolveConfig()).toEqual({ zeusApiUrl: "", zeusAuthToken: "" });
+    expect(resolveConfig()).toEqual({ zeusApiUrl: "", zeusAuthToken: "", toolOrder: null });
+  });
+
+  it("reads toolOrder from window.ZeusTraceConfig", () => {
+    window.ZeusTraceConfig = {
+      toolOrder: { v1: ["find"], v2: ["search", "get"] },
+    };
+
+    expect(resolveConfig().toolOrder).toEqual({ v1: ["find"], v2: ["search", "get"] });
+  });
+
+  it("parses toolOrder JSON from script dataset", () => {
+    setLoadingScript({
+      dataset: { toolOrder: '{"v1":["a"],"v2":["b"]}' },
+    });
+
+    expect(resolveConfig().toolOrder).toEqual({ v1: ["a"], v2: ["b"] });
+  });
+
+  it("prefers window toolOrder over script dataset", () => {
+    window.ZeusTraceConfig = { toolOrder: { v1: ["win"], v2: ["win"] } };
+    setLoadingScript({ dataset: { toolOrder: '{"v1":["lose"],"v2":["lose"]}' } });
+
+    expect(resolveConfig().toolOrder).toEqual({ v1: ["win"], v2: ["win"] });
   });
 });
 
 describe("publicConfig", () => {
-  it("exposes only zeusApiUrl", () => {
-    expect(publicConfig({ zeusApiUrl: "https://zeus.example.com", zeusAuthToken: "secret" })).toEqual({
+  it("exposes zeusApiUrl and toolOrder", () => {
+    expect(
+      publicConfig({
+        zeusApiUrl: "https://zeus.example.com",
+        zeusAuthToken: "secret",
+        toolOrder: { v1: [], v2: ["find"] },
+      })
+    ).toEqual({
       zeusApiUrl: "https://zeus.example.com",
+      toolOrder: { v1: [], v2: ["find"] },
     });
   });
 });
@@ -77,5 +109,20 @@ describe("zeusFetch", () => {
     await zeusFetch("/api/tool-order", { zeusApiUrl: "https://zeus.example.com", zeusAuthToken: "" });
 
     expect(fetchMock).toHaveBeenCalledWith("https://zeus.example.com/api/tool-order", { headers: {} });
+  });
+
+  it("forwards AbortSignal when provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await zeusFetch("/api/tool-order", { zeusApiUrl: "https://zeus.example.com", zeusAuthToken: "" }, {
+      signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://zeus.example.com/api/tool-order", {
+      headers: {},
+      signal: controller.signal,
+    });
   });
 });

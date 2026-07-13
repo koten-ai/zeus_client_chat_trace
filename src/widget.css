@@ -284,10 +284,14 @@
 .trace-dump .collapse-title {
   font: 11px ui-monospace, monospace;
   list-style: none;
+  min-height: 2.25rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
-.trace-dump .collapse-title::-webkit-details-marker {
-  display: none;
+/* Checkbox collapse (DaisyUI): keep title row clickable and content readable. */
+.trace-dump > input[type="checkbox"] {
+  min-height: 2.25rem;
 }
 
 .trace-dump-viewer {

@@ -1,13 +1,24 @@
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initZeusTrace } from "./trace.js";
 
-const widgetHtml = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "widget.html"),
-  "utf8"
-);
+// Minimal panel markup (ids must match src/widget.html). Avoid node:fs under jsdom.
+const widgetHtml = `
+<button type="button" id="debug-toggle" aria-expanded="false"></button>
+<aside id="debug-panel" class="debug-panel is-hidden" aria-hidden="true">
+  <header class="debug-panel-header">
+    <h2>Zeus Trace</h2>
+    <button type="button" id="trace-copy-full">Copy all</button>
+    <button type="button" id="debug-close">×</button>
+  </header>
+  <div id="trace-total" class="trace-total" style="display:none"></div>
+  <div id="trace-list" class="trace-list">
+    <div id="trace-empty">No search run yet.</div>
+  </div>
+</aside>
+<div id="toast" class="toast hidden">
+  <div class="alert"><span id="toast-msg"></span></div>
+</div>
+`;
 
 function makeTraceFixture(overrides = {}) {
   return {
@@ -72,6 +83,96 @@ describe("initZeusTrace", () => {
     expect(root.querySelector(".trace-waterfall")).not.toBeNull();
   });
 
+  it("shows Hash Traces and Tool calls dump for multi-round tool calls", async () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "multi-round",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 900,
+          spans: [
+            { name: "ai.chat.round.1", cls: "ai", at: 0, ms: 200 },
+            { name: "tool.find", cls: "tool", at: 200, ms: 300 },
+            { name: "ai.chat.round.2", cls: "ai", at: 500, ms: 400 },
+          ],
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              finish_reason: "tool_calls",
+              tool_calls: ["find"],
+              usage: { total_tokens: 50, prompt_tokens: 30, completion_tokens: 20 },
+            },
+            { type: "tool", round: 1, name: "find", status: 200, ms: 300, bytes: 512 },
+            { type: "llm", round: 2, ms: 400, finish_reason: "stop", tool_calls: [] },
+          ],
+          ai_requests: [{ round: 1 }, { round: 2 }],
+          ai_responses: [{ round: 1 }, { round: 2 }],
+          tool_calls: [
+            { round: 1, name: "find", status: 200, ms: 300 },
+          ],
+        },
+      })
+    );
+
+    const card = root.querySelector(".trace-card");
+    expect(card).not.toBeNull();
+    expect(card.textContent).toContain("2 rounds");
+
+    // Hash Traces is sync — must show round-prefixed LLM/tool lines.
+    const hashDump = [...card.querySelectorAll(".trace-dump")].find((el) =>
+      el.textContent.includes("Hash Traces")
+    );
+    expect(hashDump).toBeTruthy();
+    expect(hashDump.textContent).toMatch(/\[r1\] LLM/);
+    expect(hashDump.textContent).toMatch(/\[r1\] TOOL find/);
+    expect(hashDump.textContent).toMatch(/\[r2\] LLM/);
+
+    // Dump titles attach immediately (before jsnview settles).
+    await vi.waitFor(() => {
+      const titles = [...card.querySelectorAll(".collapse-title")].map((el) => el.textContent);
+      expect(titles.some((t) => t.includes("Tool calls"))).toBe(true);
+      expect(titles.some((t) => t.includes("AI requests") && t.includes("2 rounds"))).toBe(true);
+      expect(titles.some((t) => t.includes("AI responses") && t.includes("2 rounds"))).toBe(true);
+    });
+
+    // Tool calls section is open by default when non-empty (checkbox collapse).
+    const toolSection = [...card.querySelectorAll(".trace-dump")].find((el) =>
+      el.querySelector(".collapse-title")?.textContent?.includes("Tool calls")
+    );
+    expect(toolSection).toBeTruthy();
+    expect(toolSection.querySelector('input[type="checkbox"]')?.checked).toBe(true);
+  });
+
+  it("shows tool_calls rounds in Hash Traces when steps are empty", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "tool-calls only",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 100,
+          spans: [],
+          steps: [],
+          ai_requests: [],
+          ai_responses: [],
+          tool_calls: [
+            { round: 1, name: "search", status: 200, ms: 40 },
+            { round: 2, name: "find", status: 200, ms: 50 },
+          ],
+        },
+      })
+    );
+
+    const card = root.querySelector(".trace-card");
+    expect(card.textContent).toMatch(/\[r1\] TOOL search/);
+    expect(card.textContent).toMatch(/\[r2\] TOOL find/);
+  });
+
   it("appendTraceCard ignores payloads without trace", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
 
@@ -102,5 +203,139 @@ describe("initZeusTrace", () => {
         expect.objectContaining({ headers: { Authorization: "Bearer tok" } })
       );
     });
+  });
+
+  it("readyToolOrder resolves even when fetch never settles (timeout)", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = initZeusTrace(root, {
+      zeusApiUrl: "https://zeus.example.com",
+      zeusAuthToken: "",
+      toolOrderTimeoutMs: 50,
+    });
+
+    const readyPromise = api.readyToolOrder;
+    await vi.advanceTimersByTimeAsync(60);
+    await expect(readyPromise).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("does not require readyToolOrder before appendTraceCard works", async () => {
+    let resolveFetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          })
+      )
+    );
+
+    const api = initZeusTrace(root, { zeusApiUrl: "https://zeus.example.com", zeusAuthToken: "" });
+    // Widget APIs must work while tool-order is still in flight.
+    api.appendTraceCard("Find hotels in Paris", makeTraceFixture());
+    expect(root.querySelector(".trace-card")).not.toBeNull();
+
+    resolveFetch({ ok: true, json: async () => ({ v1: [], v2: ["search"] }) });
+    await api.readyToolOrder;
+  });
+
+  it("applies tool_order from search response payload", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard("response tool order", makeTraceFixture({
+      tool_order: { v1: [], v2: ["pipeline", "search", "find"] },
+      trace: {
+        rounds: 1,
+        total_ms: 100,
+        spans: [],
+        steps: [
+          { type: "tool", round: 1, name: "find", status: 200, ms: 40 },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 60 },
+        ],
+        ai_requests: [],
+        tool_calls: [],
+      },
+    }));
+
+    const labels = [...root.querySelectorAll(".vbar-labels .l")].map((el) => el.textContent);
+    expect(labels.indexOf("pipeline")).toBeLessThan(labels.indexOf("search"));
+    expect(labels.indexOf("search")).toBeLessThan(labels.indexOf("find"));
+  });
+
+  it("defaults missing api_version to v2 for chart order", () => {
+    const api = initZeusTrace(root, {
+      zeusApiUrl: "",
+      zeusAuthToken: "",
+      toolOrder: { v1: ["find"], v2: ["pipeline", "search", "find"] },
+    });
+
+    const fixture = makeTraceFixture({
+      trace: {
+        rounds: 1,
+        total_ms: 100,
+        spans: [],
+        steps: [
+          { type: "tool", round: 1, name: "find", status: 200, ms: 40 },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 60 },
+        ],
+        ai_requests: [],
+        tool_calls: [],
+      },
+    });
+    delete fixture.api_version;
+
+    api.appendTraceCard("default v2 order", fixture);
+
+    const labels = [...root.querySelectorAll(".vbar-labels .l")].map((el) => el.textContent);
+    expect(labels.indexOf("pipeline")).toBeLessThan(labels.indexOf("search"));
+    expect(labels.indexOf("search")).toBeLessThan(labels.indexOf("find"));
+    expect(root.querySelector(".tc-meta")?.textContent).toMatch(/V2/);
+  });
+
+  it("uses injected toolOrder without fetching", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = initZeusTrace(root, {
+      zeusApiUrl: "https://zeus.example.com",
+      zeusAuthToken: "tok",
+      toolOrder: { v1: [], v2: ["search", "get", "find"] },
+    });
+
+    await api.readyToolOrder;
+
+    api.appendTraceCard("ordered tools", makeTraceFixture({
+      trace: {
+        rounds: 1,
+        total_ms: 225,
+        spans: [],
+        steps: [
+          { type: "tool", round: 1, name: "find", status: 200, ms: 100 },
+          { type: "tool", round: 1, name: "get", status: 200, ms: 50 },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 75 },
+        ],
+        ai_requests: [],
+        tool_calls: [],
+      },
+    }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const labels = [...root.querySelectorAll(".vbar-labels .l")].map((el) => el.textContent);
+    expect(labels).toEqual(["search", "get", "find"]);
   });
 });

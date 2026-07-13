@@ -1,11 +1,11 @@
-import { zeusFetch } from "./config.js";
+import { parseToolOrder, zeusFetch } from "./config.js";
 import { loadJsnview } from "./jsnview-loader.js";
 
 export function initZeusTrace(root, config = {}) {
   const $ = (id) => root.querySelector(`#${id}`);
 
   const TRACE_MAX_CARDS = 12;
-  let CHART_ORDER = { v1: [], v2: [] };
+  let CHART_ORDER = parseToolOrder(config.toolOrder) ?? { v1: [], v2: [] };
   let activeTraceEntries = [];
   let traceTurn = 0;
   const traceTotals = [];
@@ -66,18 +66,44 @@ export function initZeusTrace(root, config = {}) {
   }
 
   function apiValue(v) {
-    return String(v || "v1").toLowerCase() === "v2" ? "v2" : "v1";
+    // Default v2 to match card-header display and modern Zeus hosts.
+    return String(v || "v2").toLowerCase() === "v1" ? "v1" : "v2";
+  }
+
+  function applyToolOrder(raw) {
+    const order = parseToolOrder(raw);
+    if (order) CHART_ORDER = order;
   }
 
   async function loadToolOrder() {
-    if (!config.zeusApiUrl) {
-      CHART_ORDER = { v1: [], v2: [] };
+    const injected = parseToolOrder(config.toolOrder);
+    if (injected) {
+      CHART_ORDER = injected;
       return;
     }
+    if (!config.zeusApiUrl) {
+      return;
+    }
+    const timeoutMs = Number(config.toolOrderTimeoutMs);
+    const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 3000;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = controller
+      ? setTimeout(() => {
+          try {
+            controller.abort();
+          } catch {
+            /* ignore */
+          }
+        }, ms)
+      : null;
     try {
-      CHART_ORDER = await (await zeusFetch("/api/tool-order", config)).json();
+      const res = await zeusFetch("/api/tool-order", config, controller ? { signal: controller.signal } : {});
+      const fetched = parseToolOrder(await res.json());
+      if (fetched) CHART_ORDER = fetched;
     } catch {
-      CHART_ORDER = { v1: [], v2: [] };
+      /* keep sync fallback — network/CORS/abort must not affect the widget */
+    } finally {
+      if (timer != null) clearTimeout(timer);
     }
   }
 
@@ -288,12 +314,38 @@ export function initZeusTrace(root, config = {}) {
     const lines = [];
     (t.notes || []).forEach((n) => lines.push("• " + n));
     (t.steps || []).forEach((s) => {
+      const rnd = s.round != null ? s.round : "?";
       if (s.type === "llm") {
-        lines.push(`[r${s.round}] LLM ${s.ms || 0}ms → ${s.finish_reason || ""} calls=[${(s.tool_calls || []).join(", ")}]`);
+        const u = s.usage || {};
+        const tok = u.total_tokens
+          ? `  tok=${u.total_tokens} (in ${u.prompt_tokens || "?"}/out ${u.completion_tokens || "?"})`
+          : "";
+        lines.push(
+          `[r${rnd}] LLM ${s.ms || 0}ms → ${s.finish_reason || ""}  calls=[${(s.tool_calls || []).join(", ")}]${tok}`
+        );
       } else if (s.type === "tool") {
-        lines.push(`[r${s.round}] TOOL ${s.name} → ${s.status} ${s.ms}ms`);
+        if (s.name === "pipeline") {
+          const expanded = pipelineSpansFromStep(0, s.ms, s);
+          lines.push(`[r${rnd}] PIPELINE ${s.ms || 0}ms → ${s.status} ${fmtBytes(s.bytes || 0)}`);
+          if (expanded) {
+            expanded.forEach((sp) => {
+              lines.push(`  · ${sp.name} ${sp.ms || 0}ms${sp.detail != null ? " → " + sp.detail : ""}`);
+            });
+          }
+        } else {
+          lines.push(`[r${rnd}] TOOL ${s.name} → ${s.status} ${s.ms || 0}ms`);
+        }
+      } else if (s.type === "llm_error") {
+        lines.push(`[r${rnd}] LLM_ERROR ${s.ms || 0}ms ${s.detail || ""}`);
       }
     });
+    // Fallback: tool_calls records when steps are missing/empty (still show rounds).
+    if (!lines.some((l) => l.startsWith("[r")) && (t.tool_calls || []).length) {
+      (t.tool_calls || []).forEach((tc) => {
+        const rnd = tc.round != null ? tc.round : "?";
+        lines.push(`[r${rnd}] TOOL ${tc.name || "?"} → ${tc.status} ${tc.ms || 0}ms`);
+      });
+    }
     return lines.join("\n");
   }
 
@@ -318,11 +370,15 @@ export function initZeusTrace(root, config = {}) {
     }
   }
 
-  function appendTextDetails(parent, title, text) {
-    const root = document.createElement("details");
+  function appendTextDetails(parent, title, text, open = false) {
+    const root = document.createElement("div");
     root.className = "collapse collapse-plus trace-dump bg-base-200 rounded border border-base-300";
-    const titleEl = document.createElement("summary");
-    titleEl.className = "collapse-title text-xs font-bold py-2";
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.setAttribute("aria-label", title);
+    if (open) toggle.checked = true;
+    const titleEl = document.createElement("div");
+    titleEl.className = "collapse-title text-xs font-bold py-2 min-h-0";
     titleEl.textContent = title;
     const content = document.createElement("div");
     content.className = "collapse-content";
@@ -330,39 +386,73 @@ export function initZeusTrace(root, config = {}) {
     pre.className = "trace-pre bg-base-300 rounded p-2 mt-1";
     pre.textContent = text;
     content.appendChild(pre);
-    root.append(titleEl, content);
+    root.append(toggle, titleEl, content);
     parent.appendChild(root);
   }
 
   async function appendJSONDetails(parent, title, obj, open) {
-    const root = document.createElement("details");
+    // Prefer checkbox collapse-plus (DaisyUI-recommended). details+open is unreliable
+    // with collapse-plus when DaisyUI CSS loads after content is mounted.
+    const root = document.createElement("div");
     root.className = "collapse collapse-plus trace-dump bg-base-200 rounded border border-base-300";
-    if (open) root.open = true;
-    const titleEl = document.createElement("summary");
-    titleEl.className = "collapse-title text-xs font-bold py-2";
+
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.setAttribute("aria-label", title);
+    if (open) toggle.checked = true;
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "collapse-title text-xs font-bold py-2 min-h-0";
     titleEl.textContent = title;
+
     const content = document.createElement("div");
     content.className = "collapse-content";
     const viewerHost = document.createElement("div");
     viewerHost.className = "trace-dump-viewer";
     content.appendChild(viewerHost);
-    root.append(titleEl, content);
+
+    root.append(toggle, titleEl, content);
     parent.appendChild(root);
     await mountJsnviewViewer(viewerHost, obj, open);
+  }
+
+  function roundLabel(n) {
+    const count = Array.isArray(n) ? n.length : Number(n) || 0;
+    return `${count} round${count === 1 ? "" : "s"}`;
   }
 
   async function appendTraceDump(card, question, j, t) {
     const wrap = document.createElement("div");
     wrap.className = "trace-dump-wrap";
-    await appendJSONDetails(wrap, `AI requests · ${(t.ai_requests || []).length}`, t.ai_requests || []);
-    await appendJSONDetails(wrap, `Tool calls · ${(t.tool_calls || []).length}`, t.tool_calls || [], true);
-    await appendJSONDetails(wrap, "Raw turn bundle", { question, answer: j.answer, trace: t });
+    // Attach immediately so dump titles stay visible even if jsnview hangs/fails.
     card.appendChild(wrap);
+
+    const aiReqs = t.ai_requests || [];
+    const aiResps = t.ai_responses || [];
+    const toolCalls = t.tool_calls || [];
+
+    // Mount dumps in parallel; each section already has a sync title + fallback pre.
+    await Promise.all([
+      appendJSONDetails(wrap, `AI requests · ${roundLabel(aiReqs)}`, aiReqs),
+      appendJSONDetails(wrap, `AI responses · ${roundLabel(aiResps)}`, aiResps),
+      appendJSONDetails(wrap, `Tool calls · ${toolCalls.length}`, toolCalls, toolCalls.length > 0),
+      appendJSONDetails(wrap, "Raw turn bundle", {
+        question,
+        answer: j.answer,
+        target: j.target,
+        api_version: j.api_version || t.api_version,
+        session_id: j.session_id,
+        session_round: j.session_round,
+        contract_status: j.contract_status,
+        trace: t,
+      }),
+    ]);
   }
 
   function appendTraceCard(question, j) {
     const t = j.trace;
     if (!t) return;
+    applyToolOrder(j.tool_order);
     chatId = j.chat_id || chatId;
     if (!activeTraceEntries.includes(j)) activeTraceEntries.push(j);
     const list = $("trace-list");
@@ -377,7 +467,7 @@ export function initZeusTrace(root, config = {}) {
     head.innerHTML =
       `<span class="tc-n">#${traceTurn}</span>`
       + `<span class="tc-q" title="${escapeHtml(question)}">${escapeHtml(question)}</span>`
-      + `<span class="tc-meta">${escapeHtml((j.api_version || "v2").toUpperCase())} · ${escapeHtml(j.target || "")} · ${t.rounds || 0} rounds</span>`
+      + `<span class="tc-meta">${escapeHtml(apiValue(j.api_version || t.api_version).toUpperCase())} · ${escapeHtml(j.target || "")} · ${t.rounds || 0} rounds</span>`
       + (contractSessionBadges(j, t) ? `<span class="tc-badges">${contractSessionBadges(j, t)}</span>` : "");
     card.appendChild(head);
     card.appendChild(buildMetricsRow(t));
@@ -387,7 +477,7 @@ export function initZeusTrace(root, config = {}) {
     if (wf.firstChild) card.appendChild(wf.firstChild);
 
     const vbar = document.createElement("div");
-    vbar.innerHTML = toolFrequencyChartHTML(t.steps, j.api_version || t.api_version);
+    vbar.innerHTML = toolFrequencyChartHTML(t.steps, j.api_version || t.api_version || "v2");
     if (vbar.firstChild) card.appendChild(vbar.firstChild);
 
     const detailText = traceText(t);
@@ -414,7 +504,13 @@ export function initZeusTrace(root, config = {}) {
     navigator.clipboard.writeText(prettyJSON({ chat_id: chatId, traces: shown })).then(() => showToast("Trace copied"));
   });
 
-  loadToolOrder();
+  const readyToolOrder = loadToolOrder();
 
-  return { appendTraceCard, openDebugPanel, closeDebugPanel };
+  return {
+    appendTraceCard,
+    openDebugPanel,
+    closeDebugPanel,
+    setToolOrder: applyToolOrder,
+    readyToolOrder,
+  };
 }
