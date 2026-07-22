@@ -19,11 +19,13 @@
     window.ZeusTraceConfig = {
       zeusApiUrl: "http://localhost:8080",
       zeusAuthToken: "",
+      hubBaseUrl: "http://hub",
     };
 
     // Simulate early call before script finishes loading
     window.appendTraceCard("early queued query", {
       chat_id: "demo-chat-1",
+      req_id: "demo-req-early",
       api_version: "v2",
       target: "demo",
       answer: "Early answer",
@@ -47,6 +49,7 @@
   <script>
     const fixture = {
       chat_id: "demo-chat-1",
+      req_id: "demo-req-001",
       api_version: "v2",
       target: "demo",
       answer: "Paris is lovely in spring.",

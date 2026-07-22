@@ -1,10 +1,15 @@
 const DEFAULT_API_URL = typeof __ZEUS_API_URL__ !== "undefined" ? __ZEUS_API_URL__ : "";
 const DEFAULT_AUTH_TOKEN = typeof __ZEUS_AUTH_TOKEN__ !== "undefined" ? __ZEUS_AUTH_TOKEN__ : "";
+const WIDGET_VERSION = typeof __WIDGET_VERSION__ !== "undefined" ? __WIDGET_VERSION__ : "dev";
 
 let loadingScript = null;
 
 export function setLoadingScript(script) {
   loadingScript = script;
+}
+
+export function getWidgetVersion() {
+  return WIDGET_VERSION || "dev";
 }
 
 export function parseToolOrder(raw) {
@@ -25,6 +30,14 @@ export function parseToolOrder(raw) {
   return null;
 }
 
+export function detectiveUrl(hubBaseUrl, requestId) {
+  if (!hubBaseUrl || !requestId) return "";
+  const base = String(hubBaseUrl).replace(/\/$/, "");
+  const rid = String(requestId).trim();
+  if (!rid) return "";
+  return `${base}/hub/debug/req/${encodeURIComponent(rid)}`;
+}
+
 export function resolveConfig() {
   const fromWindow = window.ZeusTraceConfig || {};
   const script = loadingScript || document.currentScript;
@@ -35,8 +48,15 @@ export function resolveConfig() {
     ""
   ).replace(/\/$/, "");
 
+  const hubBaseUrl = (
+    fromWindow.hubBaseUrl ||
+    script?.dataset?.hubBaseUrl ||
+    ""
+  ).replace(/\/$/, "");
+
   return {
     zeusApiUrl,
+    hubBaseUrl,
     zeusAuthToken:
       fromWindow.zeusAuthToken ||
       script?.dataset?.zeusAuthToken ||
@@ -47,7 +67,12 @@ export function resolveConfig() {
 }
 
 export function publicConfig(config) {
-  return { zeusApiUrl: config.zeusApiUrl, toolOrder: config.toolOrder };
+  return {
+    zeusApiUrl: config.zeusApiUrl,
+    hubBaseUrl: config.hubBaseUrl,
+    toolOrder: config.toolOrder,
+    version: getWidgetVersion(),
+  };
 }
 
 export function zeusFetch(path, config, options = {}) {

@@ -83,4 +83,7 @@ window.ZeusTrace = {
   get config() {
     return publicConfig(resolveConfig());
   },
+  get version() {
+    return publicConfig(resolveConfig()).version;
+  },
 };

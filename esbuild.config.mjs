@@ -17,6 +17,8 @@ function loadEnvFile(path) {
 const envFile = loadEnvFile(".env");
 const zeusApiUrl = process.env.ZEUS_API_URL || envFile.ZEUS_API_URL || "";
 const zeusAuthToken = process.env.ZEUS_AUTH_TOKEN || envFile.ZEUS_AUTH_TOKEN || "";
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+const widgetVersion = process.env.WIDGET_VERSION || pkg.version || "0.0.0";
 
 const shared = {
   entryPoints: ["src/bootstrap.js"],
@@ -30,6 +32,7 @@ const shared = {
   define: {
     __ZEUS_API_URL__: JSON.stringify(zeusApiUrl),
     __ZEUS_AUTH_TOKEN__: JSON.stringify(zeusAuthToken),
+    __WIDGET_VERSION__: JSON.stringify(widgetVersion),
   },
   minify: false,
   sourcemap: true,
