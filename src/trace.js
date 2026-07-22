@@ -1,4 +1,4 @@
-import { parseToolOrder, zeusFetch } from "./config.js";
+import { detectiveUrl, getWidgetVersion, parseToolOrder, zeusFetch } from "./config.js";
 import { loadJsnview } from "./jsnview-loader.js";
 
 export function initZeusTrace(root, config = {}) {
@@ -10,6 +10,7 @@ export function initZeusTrace(root, config = {}) {
   let traceTurn = 0;
   const traceTotals = [];
   let chatId = null;
+  let latestRequestId = null;
 
   function openDebugPanel() {
     const panel = $("debug-panel");
@@ -63,6 +64,68 @@ export function initZeusTrace(root, config = {}) {
     if (!s) return "";
     const str = String(s);
     return str.length > n ? str.slice(0, n) + "…" : str;
+  }
+
+  function extractRequestId(j) {
+    if (!j || typeof j !== "object") return "";
+    const fromList = (arr) => {
+      if (!Array.isArray(arr) || !arr.length) return "";
+      return String(arr[arr.length - 1] || "").trim();
+    };
+    const fromRecords = (arr) => {
+      if (!Array.isArray(arr) || !arr.length) return "";
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const row = arr[i];
+        const rid = row && (row.req_id || row.request_id);
+        if (rid) return String(rid).trim();
+      }
+      return "";
+    };
+    const t = j.trace && typeof j.trace === "object" ? j.trace : null;
+    return String(
+      j.req_id ||
+      j.request_id ||
+      j.zeus_req_id ||
+      t?.req_id ||
+      t?.request_id ||
+      t?.session_turn?.req_id ||
+      fromList(j.req_ids) ||
+      fromList(j.meta?.req_ids) ||
+      fromList(t?.req_ids) ||
+      fromRecords(t?.tool_calls) ||
+      fromRecords(t?.steps) ||
+      t?.session?.create_req_id ||
+      ""
+    ).trim();
+  }
+
+  function updateDebugTitle(requestId) {
+    const titleEl = $("debug-panel-title");
+    const linkEl = $("debug-detective-link");
+    const rid = (requestId || "").trim();
+
+    if (titleEl) {
+      titleEl.textContent = rid ? `Zeus Tracer: ${rid}` : "Zeus Tracer";
+      if (rid) titleEl.setAttribute("title", rid);
+      else titleEl.removeAttribute("title");
+    }
+
+    if (!linkEl) return;
+
+    const href = detectiveUrl(config.hubBaseUrl, rid);
+    if (href) {
+      linkEl.href = href;
+      linkEl.hidden = false;
+      linkEl.classList.remove("is-disabled");
+      linkEl.setAttribute("aria-disabled", "false");
+      linkEl.setAttribute("title", `Open Hub Detective for ${rid}`);
+    } else {
+      linkEl.href = "#";
+      linkEl.hidden = true;
+      linkEl.classList.add("is-disabled");
+      linkEl.setAttribute("aria-disabled", "true");
+      linkEl.setAttribute("title", "Open Hub Detective for this request");
+    }
   }
 
   function apiValue(v) {
@@ -454,6 +517,11 @@ export function initZeusTrace(root, config = {}) {
     if (!t) return;
     applyToolOrder(j.tool_order);
     chatId = j.chat_id || chatId;
+    const rid = extractRequestId(j);
+    if (rid) {
+      latestRequestId = rid;
+      updateDebugTitle(rid);
+    }
     if (!activeTraceEntries.includes(j)) activeTraceEntries.push(j);
     const list = $("trace-list");
     const empty = $("trace-empty");
@@ -504,6 +572,15 @@ export function initZeusTrace(root, config = {}) {
     navigator.clipboard.writeText(prettyJSON({ chat_id: chatId, traces: shown })).then(() => showToast("Trace copied"));
   });
 
+  updateDebugTitle(latestRequestId);
+
+  const versionEl = $("debug-panel-version");
+  if (versionEl) {
+    const ver = getWidgetVersion();
+    versionEl.textContent = ver.startsWith("v") ? ver : `v${ver}`;
+    versionEl.setAttribute("title", `zeus_client_chat_trace ${ver}`);
+  }
+
   const readyToolOrder = loadToolOrder();
 
   return {
@@ -512,5 +589,6 @@ export function initZeusTrace(root, config = {}) {
     closeDebugPanel,
     setToolOrder: applyToolOrder,
     readyToolOrder,
+    version: getWidgetVersion(),
   };
 }

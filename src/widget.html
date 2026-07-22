@@ -13,7 +13,19 @@
 
 <aside id="debug-panel" class="debug-panel is-hidden" aria-hidden="true">
   <header class="debug-panel-header">
-    <h2 class="font-bold text-sm">Zeus Trace</h2>
+    <div class="debug-panel-title-row">
+      <h2 id="debug-panel-title" class="font-bold text-sm">Zeus Tracer</h2>
+      <a
+        id="debug-detective-link"
+        class="debug-detective-link is-disabled"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-disabled="true"
+        title="Open Hub Detective for this request"
+        hidden
+      >Detective ↗</a>
+    </div>
     <div class="flex gap-2">
       <button type="button" id="trace-copy-full" class="btn btn-xs btn-ghost">Copy all</button>
       <button type="button" id="debug-close" class="btn btn-xs btn-ghost" aria-label="Close">×</button>
@@ -23,6 +35,9 @@
   <div id="trace-list" class="trace-list">
     <div id="trace-empty" class="opacity-50 text-sm p-4">No search run yet.</div>
   </div>
+  <footer id="debug-panel-footer" class="debug-panel-footer" aria-label="Widget version">
+    <span id="debug-panel-version" class="debug-panel-version">v—</span>
+  </footer>
 </aside>
 
 <div id="toast" class="toast toast-bottom toast-end z-high hidden">

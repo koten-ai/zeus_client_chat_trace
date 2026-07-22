@@ -56,6 +56,37 @@
   border-bottom: 1px solid hsl(var(--b3));
   background: hsl(var(--b2) / 0.6);
   flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+.debug-panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.debug-panel-title-row h2 {
+  margin: 0;
+  word-break: break-all;
+}
+
+.debug-detective-link {
+  font-size: 0.75rem;
+  line-height: 1;
+  text-decoration: underline;
+  color: hsl(var(--p));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.debug-detective-link.is-disabled,
+.debug-detective-link[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .trace-list {
@@ -231,6 +262,23 @@
   font-weight: 700;
   text-transform: uppercase;
   color: hsl(var(--p));
+}
+
+.debug-panel-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 4px 10px 6px;
+  border-top: 1px solid hsl(var(--b3));
+  background: hsl(var(--b2) / 0.45);
+}
+
+.debug-panel-version {
+  font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: hsl(var(--bc) / 0.55);
+  letter-spacing: 0.02em;
+  user-select: text;
 }
 
 .trace-card {

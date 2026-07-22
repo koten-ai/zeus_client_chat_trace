@@ -144,6 +144,7 @@ Add configuration and the script tag to any HTML page:
   window.ZeusTraceConfig = {
     zeusApiUrl: "https://zeus.example.com",
     zeusAuthToken: "optional-bearer-token",
+    hubBaseUrl: "http://hub",
   };
 </script>
 <script src="/dist/zeus_client_chat_trace.js" async></script>
@@ -157,18 +158,24 @@ Alternatively, pass config via data attributes on the script tag:
   async
   data-zeus-api-url="https://zeus.example.com"
   data-zeus-auth-token="optional-bearer-token"
+  data-hub-base-url="http://hub"
 ></script>
 ```
 
 Config resolution order: `window.ZeusTraceConfig` → script `data-*` attributes → build-time `.env` defaults.
 
+`hubBaseUrl` is the Hub / Detective origin (often different from the public API, e.g. admin port `:9091`). When unset, the Detective link stays hidden.
+
 ### 3. Feed traces after each search
 
-After your app receives a Zeus API response, pass the user query and full JSON body to the widget:
+After your app receives a Zeus API response, pass the user query and full JSON body to the widget. Forward the Zeus request id when the body does not include it (header `X-Zeus-Req-Id`):
 
 ```js
 // responseJson must include a `trace` object
-window.appendTraceCard(userQuery, responseJson);
+window.appendTraceCard(userQuery, {
+  ...responseJson,
+  req_id: responseJson.req_id || response.headers.get("X-Zeus-Req-Id"),
+});
 
 // Optionally open the panel immediately
 window.openDebugPanel?.();
@@ -183,6 +190,8 @@ api.openDebugPanel();
 ```
 
 A floating toggle button (bottom-right) lets users open and close the panel at any time.
+
+When `req_id` (or equivalent body field) and `hubBaseUrl` are both set, the panel title shows `Zeus Tracer: {requestID}` and a **Detective ↗** link opens `{hubBaseUrl}/hub/debug/req/{requestID}` in a new tab.
 
 ### 4. Try the local demo
 
@@ -199,11 +208,12 @@ The demo page simulates a host app: it queues an early trace before the script l
 
 | Global | Description |
 |--------|-------------|
-| `window.ZeusTraceConfig` | Set **before** loading the script. `{ zeusApiUrl, zeusAuthToken }` |
-| `window.appendTraceCard(question, responseJson)` | Append a trace card. `responseJson.trace` is required. |
+| `window.ZeusTraceConfig` | Set **before** loading the script. `{ zeusApiUrl, zeusAuthToken, hubBaseUrl, toolOrder }` |
+| `window.appendTraceCard(question, responseJson)` | Append a trace card. `responseJson.trace` is required. Prefer also passing `req_id` (from body or `X-Zeus-Req-Id`). |
 | `window.openDebugPanel()` | Show the debug panel. |
 | `window.ZeusTrace.ready` | Promise resolving to `{ api, config }` once the widget is mounted. |
-| `window.ZeusTrace.config` | Read-only public config (`zeusApiUrl` only; token is never exposed). |
+| `window.ZeusTrace.config` | Read-only public config (`zeusApiUrl`, `hubBaseUrl`, `toolOrder`, `version`; token is never exposed). |
+| `window.ZeusTrace.version` | Built widget version from `package.json` (also shown in the panel footer). |
 
 ### Expected response shape
 
@@ -212,6 +222,7 @@ The demo page simulates a host app: it queues an early trace before the script l
 ```js
 {
   chat_id: "optional-session-id",
+  req_id: "optional-zeus-request-id",
   api_version: "v2",
   target: "search-target",
   answer: "...",
