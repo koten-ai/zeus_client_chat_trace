@@ -82,18 +82,22 @@ export function initZeusTrace(root, config = {}) {
       return "";
     };
     const t = j.trace && typeof j.trace === "object" ? j.trace : null;
+    // Prefer tool / search hop ids for Hub Detective. zeus_client also stamps
+    // trace.session_turn.req_id from POST /v2/session/{id}/turn — that bundle
+    // is edge+auth only (no FTS/tools) and is a poor Detective target when a
+    // tool req_id is available on the same payload.
     return String(
       j.req_id ||
       j.request_id ||
       j.zeus_req_id ||
       t?.req_id ||
       t?.request_id ||
-      t?.session_turn?.req_id ||
       fromList(j.req_ids) ||
       fromList(j.meta?.req_ids) ||
       fromList(t?.req_ids) ||
       fromRecords(t?.tool_calls) ||
       fromRecords(t?.steps) ||
+      t?.session_turn?.req_id ||
       t?.session?.create_req_id ||
       ""
     ).trim();

@@ -193,6 +193,8 @@ A floating toggle button (bottom-right) lets users open and close the panel at a
 
 When `req_id` (or equivalent body field) and `hubBaseUrl` are both set, the panel title shows `Zeus Tracer: {requestID}` and a **Detective ↗** link opens `{hubBaseUrl}/hub/debug/req/{requestID}` in a new tab.
 
+Request-id resolution prefers **tool hops** over session durability endpoints: top-level / `trace.req_id`, then `req_ids[]` / `tool_calls[].req_id` / `steps[]`, and only then `trace.session_turn.req_id` (from `POST /v2/session/{id}/turn`, which is edge+auth only in Detective).
+
 ### 4. Try the local demo
 
 ```bash
@@ -278,6 +280,7 @@ examples/
 | No tool-call rounds / dumps never appear | Stale bundle with broken jsnview URL hanging load | Redeploy rebuilt `dist/zeus_client_chat_trace.js` |
 | Widget styles missing | DaisyUI CDN blocked | Allow `cdn.jsdelivr.net` |
 | Early `appendTraceCard` calls lost | Custom stub overwrote the queue | Use the built bundle as-is; it installs the queue before mount |
+| Detective opens a thin edge-only bundle | Link used `session_turn.req_id` (`/v2/session/.../turn`) instead of a tool hop | Rebuild this widget (≥ tool-id-first `extractRequestId`); prefer `tool_calls[].req_id` / `req_ids[]` |
 
 ## Docs
 

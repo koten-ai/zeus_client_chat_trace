@@ -474,7 +474,7 @@ describe("initZeusTrace", () => {
       expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: from-trace");
     });
 
-    it("extracts request id from trace.session_turn.req_id", () => {
+    it("prefers tool_call req_id over session_turn (Detective tool hop)", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
@@ -496,9 +496,42 @@ describe("initZeusTrace", () => {
         })
       );
 
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: turn-req-123");
+      // /v2/session/.../turn bundles are thin; tool hop is the Detective target.
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: tool-old");
       expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/turn-req-123"
+        "http://hub/hub/debug/req/tool-old"
+      );
+    });
+
+    it("prefers last trace.req_ids entry over session_turn (zeus_client shape)", () => {
+      const api = initZeusTrace(root, {
+        zeusApiUrl: "",
+        zeusAuthToken: "",
+        hubBaseUrl: "http://hub",
+      });
+
+      api.appendTraceCard(
+        "q",
+        makeTraceFixture({
+          trace: {
+            rounds: 1,
+            total_ms: 10,
+            spans: [],
+            steps: [],
+            ai_requests: [],
+            tool_calls: [],
+            // zeus_client session_meta.req_ids = tool hops; session_turn is /turn only.
+            req_ids: ["402a29b2-tool-search", "a1b2c3d4-tool-project"],
+            session_turn: { req_id: "e020712c-session-turn", status: 200 },
+          },
+        })
+      );
+
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe(
+        "Zeus Tracer: a1b2c3d4-tool-project"
+      );
+      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
+        "http://hub/hub/debug/req/a1b2c3d4-tool-project"
       );
     });
 
@@ -527,6 +560,34 @@ describe("initZeusTrace", () => {
       );
 
       expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: tool-b");
+    });
+
+    it("falls back to session_turn.req_id when no tool hop ids", () => {
+      const api = initZeusTrace(root, {
+        zeusApiUrl: "",
+        zeusAuthToken: "",
+        hubBaseUrl: "http://hub",
+      });
+
+      api.appendTraceCard(
+        "q",
+        makeTraceFixture({
+          trace: {
+            rounds: 1,
+            total_ms: 10,
+            spans: [],
+            steps: [],
+            ai_requests: [],
+            tool_calls: [],
+            session_turn: { req_id: "turn-req-only", status: 200 },
+          },
+        })
+      );
+
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: turn-req-only");
+      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
+        "http://hub/hub/debug/req/turn-req-only"
+      );
     });
 
     it("does not update title when payload has no trace", () => {
