@@ -20,12 +20,14 @@
       zeusApiUrl: "http://localhost:8080",
       zeusAuthToken: "",
       hubBaseUrl: "http://hub",
+      // Local demo always shows the panel (production hosts use ?debug=true).
+      enabled: true,
     };
 
     // Simulate early call before script finishes loading
     window.appendTraceCard("early queued query", {
       chat_id: "demo-chat-1",
-      req_id: "demo-req-early",
+      session_id: "demo-sess-early",
       api_version: "v2",
       target: "demo",
       answer: "Early answer",
@@ -49,7 +51,7 @@
   <script>
     const fixture = {
       chat_id: "demo-chat-1",
-      req_id: "demo-req-001",
+      session_id: "demo-sess-001",
       api_version: "v2",
       target: "demo",
       answer: "Paris is lovely in spring.",
@@ -63,9 +65,9 @@
           { name: "tool.pipeline", cls: "tool", at: 1010, ms: 240 },
         ],
         steps: [
-          { type: "llm", round: 1, ms: 320, finish_reason: "tool_calls", tool_calls: ["search"], usage: { total_tokens: 120 } },
+          { type: "llm", round: 1, ms: 320, finish_reason: "tool_calls", tool_calls: ["search"], usage: { total_tokens: 120, prompt_tokens: 80, completion_tokens: 40 } },
           { type: "tool", round: 1, name: "search", status: 200, ms: 410, bytes: 8192 },
-          { type: "llm", round: 2, ms: 280, finish_reason: "stop", usage: { total_tokens: 95 } },
+          { type: "llm", round: 2, ms: 280, finish_reason: "stop", usage: { total_tokens: 95, prompt_tokens: 70, completion_tokens: 25 } },
           { type: "tool", round: 2, name: "pipeline", status: 200, ms: 240, bytes: 2048,
             args: { steps: [{ name: "summarize", verb: "summarize" }] },
             pipeline_step_costs: [{ as: "summarize", ms: 240, status: 200 }] },

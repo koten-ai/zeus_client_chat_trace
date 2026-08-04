@@ -30,17 +30,75 @@ export function parseToolOrder(raw) {
   return null;
 }
 
-export function detectiveUrl(hubBaseUrl, requestId) {
-  if (!hubBaseUrl || !requestId) return "";
+export function detectiveUrl(hubBaseUrl, sessionId) {
+  if (!hubBaseUrl || !sessionId) return "";
   const base = String(hubBaseUrl).replace(/\/$/, "");
-  const rid = String(requestId).trim();
-  if (!rid) return "";
-  return `${base}/hub/debug/req/${encodeURIComponent(rid)}`;
+  const sid = String(sessionId).trim();
+  if (!sid) return "";
+  return `${base}/hub/debug/session/${encodeURIComponent(sid)}`;
 }
 
-export function resolveConfig() {
-  const fromWindow = window.ZeusTraceConfig || {};
-  const script = loadingScript || document.currentScript;
+/** @returns {boolean|null} null when unset / unrecognized */
+export function parseBoolFlag(raw) {
+  if (raw === true || raw === false) return raw;
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(s)) return true;
+  if (["0", "false", "no", "off"].includes(s)) return false;
+  return null;
+}
+
+/**
+ * Read page `debug` query param (e.g. `?debug=true`).
+ * @param {string} [search] defaults to `location.search`
+ * @returns {boolean|null}
+ */
+export function readDebugQueryParam(search) {
+  try {
+    const raw =
+      search !== undefined
+        ? search
+        : typeof location !== "undefined"
+          ? location.search
+          : "";
+    const q = raw.startsWith("?") || raw === "" ? raw : `?${raw}`;
+    return parseBoolFlag(new URLSearchParams(q).get("debug"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Kill switch: widget UI mounts only when enabled.
+ * Priority: explicit config/data-enabled → `?debug=` → default false.
+ */
+export function resolveEnabled(options = {}) {
+  const fromWindow =
+    options.fromWindow !== undefined
+      ? options.fromWindow || {}
+      : (typeof window !== "undefined" ? window.ZeusTraceConfig : null) || {};
+  const script =
+    options.script !== undefined
+      ? options.script
+      : loadingScript || (typeof document !== "undefined" ? document.currentScript : null);
+  const explicit = parseBoolFlag(
+    fromWindow.enabled !== undefined ? fromWindow.enabled : script?.dataset?.enabled
+  );
+  if (explicit !== null) return explicit;
+
+  const fromQuery = readDebugQueryParam(options.search);
+  if (fromQuery !== null) return fromQuery;
+
+  return false;
+}
+
+export function resolveConfig(options = {}) {
+  const fromWindow =
+    options.fromWindow !== undefined
+      ? options.fromWindow || {}
+      : window.ZeusTraceConfig || {};
+  const script =
+    options.script !== undefined ? options.script : loadingScript || document.currentScript;
   const zeusApiUrl = (
     fromWindow.zeusApiUrl ||
     script?.dataset?.zeusApiUrl ||
@@ -63,6 +121,7 @@ export function resolveConfig() {
       DEFAULT_AUTH_TOKEN ||
       "",
     toolOrder: parseToolOrder(fromWindow.toolOrder ?? script?.dataset?.toolOrder),
+    enabled: resolveEnabled({ fromWindow, script, search: options.search }),
   };
 }
 
@@ -71,6 +130,7 @@ export function publicConfig(config) {
     zeusApiUrl: config.zeusApiUrl,
     hubBaseUrl: config.hubBaseUrl,
     toolOrder: config.toolOrder,
+    enabled: Boolean(config.enabled),
     version: getWidgetVersion(),
   };
 }

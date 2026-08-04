@@ -108,11 +108,11 @@
 .msg-metrics {
   font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   opacity: 0.85;
-  margin: 2px 0 1px;
+  margin: 4px 0 6px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 6px 10px;
 }
 
 .msg-metrics .mm-total { font-weight: 600; opacity: 0.7; }
@@ -121,7 +121,8 @@
 .msg-metrics .mm-other { color: #6366f1; }
 .msg-metrics .mm-sep { opacity: 0.35; }
 .msg-metrics .mm-meta { opacity: 0.65; }
-.msg-metrics .mm-bar {
+.msg-metrics .mm-bar,
+.trace-total .mm-bar {
   display: inline-flex;
   height: 7px;
   width: 120px;
@@ -129,10 +130,70 @@
   overflow: hidden;
   background: hsl(var(--b3));
 }
-.msg-metrics .mm-bar > i { display: block; height: 100%; }
-.msg-metrics .mm-bar > i.mm-ai { background: #f97316; }
-.msg-metrics .mm-bar > i.mm-zeus { background: #10b981; }
-.msg-metrics .mm-bar > i.mm-other { background: #6366f1; }
+.msg-metrics .mm-bar > i,
+.trace-total .mm-bar > i { display: block; height: 100%; }
+.msg-metrics .mm-bar > i.mm-ai,
+.trace-total .mm-bar > i.mm-ai { background: #f97316; }
+.msg-metrics .mm-bar > i.mm-zeus,
+.trace-total .mm-bar > i.mm-zeus { background: #10b981; }
+.msg-metrics .mm-bar > i.mm-other,
+.trace-total .mm-bar > i.mm-other { background: #6366f1; }
+
+.trace-total .mm-total { font-weight: 600; opacity: 0.7; }
+.trace-total .mm-sep { opacity: 0.35; }
+.trace-total .mm-meta { opacity: 0.65; }
+
+/* DaisyUI-style token stats (in / out / total) — sized for the metrics strip */
+.mm-token-stats {
+  display: inline-flex;
+  width: auto;
+  min-height: 0;
+  background: hsl(var(--b1));
+  box-shadow: 0 1px 2px hsl(var(--bc) / 0.08);
+  border: 1px solid hsl(var(--bc) / 0.14);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.mm-token-stats .stat {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  align-content: center;
+  padding: 0.4rem 0.85rem;
+  min-width: 3.75rem;
+  gap: 0.15rem;
+  background: transparent;
+}
+.mm-token-stats .stat + .stat {
+  border-inline-start: 1px solid hsl(var(--bc) / 0.12);
+}
+.mm-token-stats .stat-title {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.15;
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+  color: hsl(var(--bc) / 0.55);
+  opacity: 1;
+  grid-column-start: auto;
+  white-space: nowrap;
+}
+.mm-token-stats .stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: hsl(var(--bc) / 0.92);
+  grid-column-start: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+#tokens-total .stats .stat .stat-value {
+  font-size: 1.81rem;
+  line-height: 1.81rem;
+}
 
 .trace-waterfall {
   display: grid;

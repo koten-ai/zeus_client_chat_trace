@@ -21,7 +21,7 @@ const widgetHtml = `
     <button type="button" id="trace-copy-full">Copy all</button>
     <button type="button" id="debug-close">×</button>
   </header>
-  <div id="trace-total" class="trace-total" style="display:none"></div>
+  <div id="trace-total-wrapper" style="display:none"></div>
   <div id="trace-list" class="trace-list">
     <div id="trace-empty">No search run yet.</div>
   </div>
@@ -104,6 +104,122 @@ describe("initZeusTrace", () => {
     expect(card.textContent).toContain("Find hotels in Paris");
     expect(card.textContent).toContain("#1");
     expect(root.querySelector(".trace-waterfall")).not.toBeNull();
+  });
+
+  it("renders DaisyUI token stats for in / out / total on the metrics row", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "token stats",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 900,
+          spans: [
+            { name: "ai.chat.round.1", cls: "ai", at: 0, ms: 200 },
+            { name: "tool.find", cls: "tool", at: 200, ms: 300 },
+            { name: "ai.chat.round.2", cls: "ai", at: 500, ms: 400 },
+          ],
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              finish_reason: "tool_calls",
+              tool_calls: ["find"],
+              usage: { total_tokens: 50, prompt_tokens: 30, completion_tokens: 20 },
+            },
+            { type: "tool", round: 1, name: "find", status: 200, ms: 300, bytes: 512 },
+            {
+              type: "llm",
+              round: 2,
+              ms: 400,
+              finish_reason: "stop",
+              tool_calls: [],
+              usage: { total_tokens: 40, prompt_tokens: 25, completion_tokens: 15 },
+            },
+          ],
+          ai_requests: [{ round: 1 }, { round: 2 }],
+          ai_responses: [{ round: 1 }, { round: 2 }],
+          tool_calls: [{ round: 1, name: "find", status: 200, ms: 300 }],
+        },
+      })
+    );
+
+    const card = root.querySelector(".trace-card");
+    expect(card.querySelector(".mm-token-stats")).toBeNull();
+
+    const tokenWrapper = root.querySelector("#tokens-total");
+    expect(tokenWrapper).not.toBeNull();
+    expect(tokenWrapper.classList.contains("trace-total")).toBe(true);
+
+    const titles = [...tokenWrapper.querySelectorAll(".stat-title")].map((el) => el.textContent);
+    const values = [...tokenWrapper.querySelectorAll(".stat-value")].map((el) => el.textContent);
+    expect(titles).toEqual(["Token In", "Token Out", "Total Tokens"]);
+    // Summed across both LLM steps
+    expect(values).toEqual(["55", "35", "90"]);
+
+    const totalEl = root.querySelector("#trace-total");
+    expect(totalEl.style.display).toBe("flex");
+    expect(totalEl.textContent).toMatch(/TOTAL/);
+  });
+
+  it("formats token stats with thousand separators", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "formatted token stats",
+      makeTraceFixture({
+        trace: {
+          rounds: 1,
+          total_ms: 500,
+          spans: [{ name: "ai.chat.round.1", cls: "ai", at: 0, ms: 200 }],
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              finish_reason: "stop",
+              usage: { total_tokens: 31200, prompt_tokens: 28000, completion_tokens: 3200 },
+            },
+          ],
+          ai_requests: [],
+          tool_calls: [],
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll("#tokens-total .stat-value")].map((el) => el.textContent);
+    expect(values).toEqual(["28,000", "3,200", "31,200"]);
+  });
+
+  it("shows ? for missing token fields and derives total from in+out", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "partial tokens",
+      makeTraceFixture({
+        trace: {
+          rounds: 1,
+          total_ms: 200,
+          spans: [{ name: "ai.chat.round.1", cls: "ai", at: 0, ms: 200 }],
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              finish_reason: "stop",
+              usage: { prompt_tokens: 12, completion_tokens: 8 },
+            },
+          ],
+          ai_requests: [],
+          tool_calls: [],
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll("#tokens-total .stat-value")].map((el) => el.textContent);
+    expect(values).toEqual(["12", "8", "20"]);
   });
 
   it("shows Hash Traces and Tool calls dump for multi-round tool calls", async () => {
@@ -373,83 +489,84 @@ describe("initZeusTrace", () => {
       expect(link?.getAttribute("aria-disabled")).toBe("true");
     });
 
-    it("sets title and Detective href from req_id and hubBaseUrl", () => {
+    it("keeps title Zeus Tracer and sets Detective href from session_id", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
         hubBaseUrl: "http://hub",
       });
 
-      api.appendTraceCard("q", makeTraceFixture({ req_id: "req-abc" }));
+      api.appendTraceCard("q", makeTraceFixture({ session_id: "sess-abc" }));
 
       const title = root.querySelector("#debug-panel-title");
       const link = root.querySelector("#debug-detective-link");
-      expect(title?.textContent).toBe("Zeus Tracer: req-abc");
-      expect(link?.getAttribute("href")).toBe("http://hub/hub/debug/req/req-abc");
+      expect(title?.textContent).toBe("Zeus Tracer");
+      expect(title?.getAttribute("title")).toBe("session sess-abc");
+      expect(link?.getAttribute("href")).toBe("http://hub/hub/debug/session/sess-abc");
       expect(link?.getAttribute("target")).toBe("_blank");
       expect(link?.getAttribute("rel")).toContain("noopener");
       expect(link?.hidden).toBe(false);
       expect(link?.getAttribute("aria-disabled")).toBe("false");
     });
 
-    it("updates title/link to the latest request id", () => {
+    it("updates Detective link to the latest session id", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
         hubBaseUrl: "http://hub",
       });
 
-      api.appendTraceCard("one", makeTraceFixture({ req_id: "req-abc" }));
-      api.appendTraceCard("two", makeTraceFixture({ req_id: "req-xyz" }));
+      api.appendTraceCard("one", makeTraceFixture({ session_id: "sess-abc" }));
+      api.appendTraceCard("two", makeTraceFixture({ session_id: "sess-xyz" }));
 
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: req-xyz");
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
       expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/req-xyz"
+        "http://hub/hub/debug/session/sess-xyz"
       );
     });
 
-    it("leaves previous title unchanged when a later card has no request id", () => {
+    it("leaves previous Detective link when a later card has no session id", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
         hubBaseUrl: "http://hub",
       });
 
-      api.appendTraceCard("one", makeTraceFixture({ req_id: "req-abc" }));
+      api.appendTraceCard("one", makeTraceFixture({ session_id: "sess-abc" }));
       api.appendTraceCard("two", makeTraceFixture());
 
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: req-abc");
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
       expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/req-abc"
+        "http://hub/hub/debug/session/sess-abc"
       );
     });
 
-    it("shows title with id but keeps Detective hidden when hubBaseUrl is missing", () => {
+    it("keeps title Zeus Tracer and Detective hidden when hubBaseUrl is missing", () => {
       const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "", hubBaseUrl: "" });
 
-      api.appendTraceCard("q", makeTraceFixture({ req_id: "req-abc" }));
+      api.appendTraceCard("q", makeTraceFixture({ session_id: "sess-abc" }));
 
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: req-abc");
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
       const link = root.querySelector("#debug-detective-link");
       expect(link?.hidden).toBe(true);
       expect(link?.getAttribute("aria-disabled")).toBe("true");
     });
 
-    it("URL-encodes special characters in Detective href", () => {
+    it("URL-encodes special characters in Detective session href", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
         hubBaseUrl: "http://hub",
       });
 
-      api.appendTraceCard("q", makeTraceFixture({ req_id: "a/b c" }));
+      api.appendTraceCard("q", makeTraceFixture({ session_id: "a/b c" }));
 
       expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        `http://hub/hub/debug/req/${encodeURIComponent("a/b c")}`
+        `http://hub/hub/debug/session/${encodeURIComponent("a/b c")}`
       );
     });
 
-    it("extracts request id from trace.req_id", () => {
+    it("extracts session id from trace.session.id", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
@@ -460,21 +577,24 @@ describe("initZeusTrace", () => {
         "q",
         makeTraceFixture({
           trace: {
-            req_id: "from-trace",
             rounds: 1,
             total_ms: 10,
             spans: [],
             steps: [],
             ai_requests: [],
             tool_calls: [],
+            session: { id: "from-trace-session" },
           },
         })
       );
 
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: from-trace");
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
+      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
+        "http://hub/hub/debug/session/from-trace-session"
+      );
     });
 
-    it("prefers tool_call req_id over session_turn (Detective tool hop)", () => {
+    it("prefers top-level session_id over nested trace.session.id", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
@@ -484,6 +604,35 @@ describe("initZeusTrace", () => {
       api.appendTraceCard(
         "q",
         makeTraceFixture({
+          session_id: "top-level-sess",
+          trace: {
+            rounds: 1,
+            total_ms: 10,
+            spans: [],
+            steps: [],
+            ai_requests: [],
+            tool_calls: [],
+            session: { id: "nested-sess" },
+          },
+        })
+      );
+
+      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
+        "http://hub/hub/debug/session/top-level-sess"
+      );
+    });
+
+    it("ignores req_id for Detective (session-only)", () => {
+      const api = initZeusTrace(root, {
+        zeusApiUrl: "",
+        zeusAuthToken: "",
+        hubBaseUrl: "http://hub",
+      });
+
+      api.appendTraceCard(
+        "q",
+        makeTraceFixture({
+          req_id: "req-only",
           trace: {
             rounds: 1,
             total_ms: 10,
@@ -496,108 +645,18 @@ describe("initZeusTrace", () => {
         })
       );
 
-      // /v2/session/.../turn bundles are thin; tool hop is the Detective target.
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: tool-old");
-      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/tool-old"
-      );
+      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
+      expect(root.querySelector("#debug-detective-link")?.hidden).toBe(true);
     });
 
-    it("prefers last trace.req_ids entry over session_turn (zeus_client shape)", () => {
+    it("does not enable Detective when payload has no trace", () => {
       const api = initZeusTrace(root, {
         zeusApiUrl: "",
         zeusAuthToken: "",
         hubBaseUrl: "http://hub",
       });
 
-      api.appendTraceCard(
-        "q",
-        makeTraceFixture({
-          trace: {
-            rounds: 1,
-            total_ms: 10,
-            spans: [],
-            steps: [],
-            ai_requests: [],
-            tool_calls: [],
-            // zeus_client session_meta.req_ids = tool hops; session_turn is /turn only.
-            req_ids: ["402a29b2-tool-search", "a1b2c3d4-tool-project"],
-            session_turn: { req_id: "e020712c-session-turn", status: 200 },
-          },
-        })
-      );
-
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe(
-        "Zeus Tracer: a1b2c3d4-tool-project"
-      );
-      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/a1b2c3d4-tool-project"
-      );
-    });
-
-    it("falls back to last tool_call req_id", () => {
-      const api = initZeusTrace(root, {
-        zeusApiUrl: "",
-        zeusAuthToken: "",
-        hubBaseUrl: "http://hub",
-      });
-
-      api.appendTraceCard(
-        "q",
-        makeTraceFixture({
-          trace: {
-            rounds: 1,
-            total_ms: 10,
-            spans: [],
-            steps: [],
-            ai_requests: [],
-            tool_calls: [
-              { name: "find", req_id: "tool-a" },
-              { name: "find", req_id: "tool-b" },
-            ],
-          },
-        })
-      );
-
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: tool-b");
-    });
-
-    it("falls back to session_turn.req_id when no tool hop ids", () => {
-      const api = initZeusTrace(root, {
-        zeusApiUrl: "",
-        zeusAuthToken: "",
-        hubBaseUrl: "http://hub",
-      });
-
-      api.appendTraceCard(
-        "q",
-        makeTraceFixture({
-          trace: {
-            rounds: 1,
-            total_ms: 10,
-            spans: [],
-            steps: [],
-            ai_requests: [],
-            tool_calls: [],
-            session_turn: { req_id: "turn-req-only", status: 200 },
-          },
-        })
-      );
-
-      expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer: turn-req-only");
-      expect(root.querySelector("#debug-detective-link")?.getAttribute("href")).toBe(
-        "http://hub/hub/debug/req/turn-req-only"
-      );
-    });
-
-    it("does not update title when payload has no trace", () => {
-      const api = initZeusTrace(root, {
-        zeusApiUrl: "",
-        zeusAuthToken: "",
-        hubBaseUrl: "http://hub",
-      });
-
-      api.appendTraceCard("notrace", { req_id: "should-not-apply", answer: "x" });
+      api.appendTraceCard("notrace", { session_id: "should-not-apply", answer: "x" });
 
       expect(root.querySelector("#debug-panel-title")?.textContent).toBe("Zeus Tracer");
       expect(root.querySelector("#debug-detective-link")?.hidden).toBe(true);

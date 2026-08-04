@@ -10,6 +10,13 @@ const DAISYUI_CDN = "https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.
 const earlyQueue = [];
 let bootstrapped = false;
 
+function noopApi() {
+  return {
+    appendTraceCard() {},
+    openDebugPanel() {},
+  };
+}
+
 function installEarlyQueue() {
   if (bootstrapped) return;
   window.appendTraceCard = (...args) => earlyQueue.push({ type: "card", args });
@@ -26,6 +33,17 @@ function drainQueue(api) {
 
 function mountWidget() {
   const config = resolveConfig();
+
+  // Kill switch: no DOM, no DaisyUI, no side-fetches when disabled.
+  // Host APIs remain no-ops so callers never throw.
+  if (!config.enabled) {
+    const api = noopApi();
+    window.appendTraceCard = api.appendTraceCard;
+    window.openDebugPanel = api.openDebugPanel;
+    earlyQueue.length = 0;
+    bootstrapped = true;
+    return { api, config };
+  }
 
   const host = document.createElement("div");
   host.id = "zeus-trace-host";

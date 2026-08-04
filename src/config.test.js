@@ -1,10 +1,98 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { detectiveUrl, getWidgetVersion, publicConfig, resolveConfig, setLoadingScript, zeusFetch } from "./config.js";
+import {
+  detectiveUrl,
+  getWidgetVersion,
+  parseBoolFlag,
+  publicConfig,
+  readDebugQueryParam,
+  resolveConfig,
+  resolveEnabled,
+  setLoadingScript,
+  zeusFetch,
+} from "./config.js";
 
 afterEach(() => {
   delete window.ZeusTraceConfig;
   setLoadingScript(null);
   vi.restoreAllMocks();
+});
+
+describe("parseBoolFlag", () => {
+  it("parses common truthy/falsy strings and booleans", () => {
+    expect(parseBoolFlag(true)).toBe(true);
+    expect(parseBoolFlag(false)).toBe(false);
+    expect(parseBoolFlag("true")).toBe(true);
+    expect(parseBoolFlag("YES")).toBe(true);
+    expect(parseBoolFlag("1")).toBe(true);
+    expect(parseBoolFlag("on")).toBe(true);
+    expect(parseBoolFlag("false")).toBe(false);
+    expect(parseBoolFlag("0")).toBe(false);
+    expect(parseBoolFlag("off")).toBe(false);
+    expect(parseBoolFlag(null)).toBe(null);
+    expect(parseBoolFlag("")).toBe(null);
+    expect(parseBoolFlag("maybe")).toBe(null);
+  });
+});
+
+describe("readDebugQueryParam", () => {
+  it("reads debug from a search string", () => {
+    expect(readDebugQueryParam("?debug=true")).toBe(true);
+    expect(readDebugQueryParam("debug=1")).toBe(true);
+    expect(readDebugQueryParam("?foo=1&debug=yes")).toBe(true);
+    expect(readDebugQueryParam("?debug=false")).toBe(false);
+    expect(readDebugQueryParam("?other=1")).toBe(null);
+    expect(readDebugQueryParam("")).toBe(null);
+  });
+});
+
+describe("resolveEnabled", () => {
+  it("defaults to false when nothing is set", () => {
+    expect(resolveEnabled({ fromWindow: {}, script: null, search: "" })).toBe(false);
+  });
+
+  it("enables when ?debug=true", () => {
+    expect(resolveEnabled({ fromWindow: {}, script: null, search: "?debug=true" })).toBe(true);
+  });
+
+  it("disables when ?debug=false", () => {
+    expect(resolveEnabled({ fromWindow: {}, script: null, search: "?debug=false" })).toBe(false);
+  });
+
+  it("prefers explicit window.enabled over debug query", () => {
+    expect(
+      resolveEnabled({ fromWindow: { enabled: false }, script: null, search: "?debug=true" })
+    ).toBe(false);
+    expect(
+      resolveEnabled({ fromWindow: { enabled: true }, script: null, search: "?debug=false" })
+    ).toBe(true);
+  });
+
+  it("reads data-enabled from script dataset", () => {
+    expect(
+      resolveEnabled({
+        fromWindow: {},
+        script: { dataset: { enabled: "true" } },
+        search: "",
+      })
+    ).toBe(true);
+    expect(
+      resolveEnabled({
+        fromWindow: {},
+        script: { dataset: { enabled: "false" } },
+        search: "?debug=true",
+      })
+    ).toBe(false);
+  });
+
+  it("prefers window.enabled over script dataset", () => {
+    expect(
+      resolveEnabled({
+        fromWindow: { enabled: true },
+        script: { dataset: { enabled: "false" } },
+        search: "",
+      })
+    ).toBe(true);
+  });
 });
 
 describe("resolveConfig", () => {
@@ -14,11 +102,12 @@ describe("resolveConfig", () => {
       zeusAuthToken: "secret",
     };
 
-    expect(resolveConfig()).toEqual({
+    expect(resolveConfig({ search: "" })).toEqual({
       zeusApiUrl: "https://zeus.example.com",
       hubBaseUrl: "",
       zeusAuthToken: "secret",
       toolOrder: null,
+      enabled: false,
     });
   });
 
@@ -27,7 +116,7 @@ describe("resolveConfig", () => {
       hubBaseUrl: "http://hub/",
     };
 
-    expect(resolveConfig().hubBaseUrl).toBe("http://hub");
+    expect(resolveConfig({ search: "" }).hubBaseUrl).toBe("http://hub");
   });
 
   it("falls back to script dataset attributes", () => {
@@ -39,11 +128,12 @@ describe("resolveConfig", () => {
       },
     });
 
-    expect(resolveConfig()).toEqual({
+    expect(resolveConfig({ search: "" })).toEqual({
       zeusApiUrl: "https://api.test",
       hubBaseUrl: "http://hub-from-data",
       zeusAuthToken: "dataset-token",
       toolOrder: null,
+      enabled: false,
     });
   });
 
@@ -61,18 +151,23 @@ describe("resolveConfig", () => {
       },
     });
 
-    expect(resolveConfig().zeusApiUrl).toBe("https://win.example.com");
-    expect(resolveConfig().zeusAuthToken).toBe("win");
-    expect(resolveConfig().hubBaseUrl).toBe("http://hub-win");
+    expect(resolveConfig({ search: "" }).zeusApiUrl).toBe("https://win.example.com");
+    expect(resolveConfig({ search: "" }).zeusAuthToken).toBe("win");
+    expect(resolveConfig({ search: "" }).hubBaseUrl).toBe("http://hub-win");
   });
 
   it("returns empty strings when unset", () => {
-    expect(resolveConfig()).toEqual({
+    expect(resolveConfig({ search: "" })).toEqual({
       zeusApiUrl: "",
       hubBaseUrl: "",
       zeusAuthToken: "",
       toolOrder: null,
+      enabled: false,
     });
+  });
+
+  it("sets enabled from debug query when config omits enabled", () => {
+    expect(resolveConfig({ search: "?debug=true" }).enabled).toBe(true);
   });
 
   it("reads toolOrder from window.ZeusTraceConfig", () => {
@@ -80,7 +175,7 @@ describe("resolveConfig", () => {
       toolOrder: { v1: ["find"], v2: ["search", "get"] },
     };
 
-    expect(resolveConfig().toolOrder).toEqual({ v1: ["find"], v2: ["search", "get"] });
+    expect(resolveConfig({ search: "" }).toolOrder).toEqual({ v1: ["find"], v2: ["search", "get"] });
   });
 
   it("parses toolOrder JSON from script dataset", () => {
@@ -88,53 +183,57 @@ describe("resolveConfig", () => {
       dataset: { toolOrder: '{"v1":["a"],"v2":["b"]}' },
     });
 
-    expect(resolveConfig().toolOrder).toEqual({ v1: ["a"], v2: ["b"] });
+    expect(resolveConfig({ search: "" }).toolOrder).toEqual({ v1: ["a"], v2: ["b"] });
   });
 
   it("prefers window toolOrder over script dataset", () => {
     window.ZeusTraceConfig = { toolOrder: { v1: ["win"], v2: ["win"] } };
     setLoadingScript({ dataset: { toolOrder: '{"v1":["lose"],"v2":["lose"]}' } });
 
-    expect(resolveConfig().toolOrder).toEqual({ v1: ["win"], v2: ["win"] });
+    expect(resolveConfig({ search: "" }).toolOrder).toEqual({ v1: ["win"], v2: ["win"] });
   });
 });
 
 describe("detectiveUrl", () => {
-  it("builds hub detective path", () => {
-    expect(detectiveUrl("http://hub", "req-abc")).toBe("http://hub/hub/debug/req/req-abc");
+  it("builds hub detective session path", () => {
+    expect(detectiveUrl("http://hub", "sess-abc")).toBe(
+      "http://hub/hub/debug/session/sess-abc"
+    );
   });
 
   it("strips trailing slash on hub base", () => {
-    expect(detectiveUrl("http://hub/", "abc")).toBe("http://hub/hub/debug/req/abc");
+    expect(detectiveUrl("http://hub/", "abc")).toBe("http://hub/hub/debug/session/abc");
   });
 
-  it("returns empty when hub or request id missing", () => {
+  it("returns empty when hub or session id missing", () => {
     expect(detectiveUrl("", "abc")).toBe("");
     expect(detectiveUrl("http://hub", "")).toBe("");
     expect(detectiveUrl("http://hub", "   ")).toBe("");
     expect(detectiveUrl(null, "abc")).toBe("");
   });
 
-  it("URL-encodes request ids", () => {
+  it("URL-encodes session ids", () => {
     expect(detectiveUrl("http://hub", "a/b c")).toBe(
-      `http://hub/hub/debug/req/${encodeURIComponent("a/b c")}`
+      `http://hub/hub/debug/session/${encodeURIComponent("a/b c")}`
     );
   });
 });
 
 describe("publicConfig", () => {
-  it("exposes zeusApiUrl, hubBaseUrl, toolOrder, and version", () => {
+  it("exposes zeusApiUrl, hubBaseUrl, toolOrder, enabled, and version", () => {
     expect(
       publicConfig({
         zeusApiUrl: "https://zeus.example.com",
         hubBaseUrl: "http://hub",
         zeusAuthToken: "secret",
         toolOrder: { v1: [], v2: ["find"] },
+        enabled: true,
       })
     ).toEqual({
       zeusApiUrl: "https://zeus.example.com",
       hubBaseUrl: "http://hub",
       toolOrder: { v1: [], v2: ["find"] },
+      enabled: true,
       version: getWidgetVersion(),
     });
   });

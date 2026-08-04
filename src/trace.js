@@ -10,7 +10,7 @@ export function initZeusTrace(root, config = {}) {
   let traceTurn = 0;
   const traceTotals = [];
   let chatId = null;
-  let latestRequestId = null;
+  let latestSessionId = null;
 
   function openDebugPanel() {
     const panel = $("debug-panel");
@@ -66,69 +66,47 @@ export function initZeusTrace(root, config = {}) {
     return str.length > n ? str.slice(0, n) + "…" : str;
   }
 
-  function extractRequestId(j) {
+  function extractSessionId(j) {
     if (!j || typeof j !== "object") return "";
-    const fromList = (arr) => {
-      if (!Array.isArray(arr) || !arr.length) return "";
-      return String(arr[arr.length - 1] || "").trim();
-    };
-    const fromRecords = (arr) => {
-      if (!Array.isArray(arr) || !arr.length) return "";
-      for (let i = arr.length - 1; i >= 0; i--) {
-        const row = arr[i];
-        const rid = row && (row.req_id || row.request_id);
-        if (rid) return String(rid).trim();
-      }
-      return "";
-    };
     const t = j.trace && typeof j.trace === "object" ? j.trace : null;
-    // Prefer tool / search hop ids for Hub Detective. zeus_client also stamps
-    // trace.session_turn.req_id from POST /v2/session/{id}/turn — that bundle
-    // is edge+auth only (no FTS/tools) and is a poor Detective target when a
-    // tool req_id is available on the same payload.
+    const sess = t?.session && typeof t.session === "object" ? t.session : null;
     return String(
-      j.req_id ||
-      j.request_id ||
-      j.zeus_req_id ||
-      t?.req_id ||
-      t?.request_id ||
-      fromList(j.req_ids) ||
-      fromList(j.meta?.req_ids) ||
-      fromList(t?.req_ids) ||
-      fromRecords(t?.tool_calls) ||
-      fromRecords(t?.steps) ||
-      t?.session_turn?.req_id ||
-      t?.session?.create_req_id ||
+      j.session_id ||
+      t?.session_id ||
+      sess?.id ||
+      sess?.session_id ||
+      j.session?.id ||
       ""
     ).trim();
   }
 
-  function updateDebugTitle(requestId) {
+  function updateDebugTitle(sessionId) {
     const titleEl = $("debug-panel-title");
     const linkEl = $("debug-detective-link");
-    const rid = (requestId || "").trim();
+    const sid = (sessionId || "").trim();
 
     if (titleEl) {
-      titleEl.textContent = rid ? `Zeus Tracer: ${rid}` : "Zeus Tracer";
-      if (rid) titleEl.setAttribute("title", rid);
+      // Product title stays fixed; session identity lives on the Detective link.
+      titleEl.textContent = "Zeus Tracer";
+      if (sid) titleEl.setAttribute("title", `session ${sid}`);
       else titleEl.removeAttribute("title");
     }
 
     if (!linkEl) return;
 
-    const href = detectiveUrl(config.hubBaseUrl, rid);
+    const href = detectiveUrl(config.hubBaseUrl, sid);
     if (href) {
       linkEl.href = href;
       linkEl.hidden = false;
       linkEl.classList.remove("is-disabled");
       linkEl.setAttribute("aria-disabled", "false");
-      linkEl.setAttribute("title", `Open Hub Detective for ${rid}`);
+      linkEl.setAttribute("title", `Open Hub Detective for session ${sid}`);
     } else {
       linkEl.href = "#";
       linkEl.hidden = true;
       linkEl.classList.add("is-disabled");
       linkEl.setAttribute("aria-disabled", "true");
-      linkEl.setAttribute("title", "Open Hub Detective for this request");
+      linkEl.setAttribute("title", "Open Hub Detective for this session");
     }
   }
 
@@ -198,18 +176,66 @@ export function initZeusTrace(root, config = {}) {
   }
 
   function traceMetrics(t) {
-    let aiMs = 0, zeusMs = 0, tokens = 0, bytes = 0;
+    let aiMs = 0, zeusMs = 0, tokens = 0, tokensIn = 0, tokensOut = 0, bytes = 0;
+    let hasTokens = false, hasIn = false, hasOut = false;
     (t.steps || []).forEach((s) => {
       if (s.type === "llm" || s.type === "llm_error") aiMs += s.ms || 0;
       if (s.type === "tool") {
         zeusMs += s.ms || 0;
         bytes += s.bytes || 0;
       }
-      if (s.usage && s.usage.total_tokens) tokens += s.usage.total_tokens;
+      const u = s.usage;
+      if (!u) return;
+      if (u.total_tokens != null) {
+        tokens += Number(u.total_tokens) || 0;
+        hasTokens = true;
+      }
+      if (u.prompt_tokens != null) {
+        tokensIn += Number(u.prompt_tokens) || 0;
+        hasIn = true;
+      }
+      if (u.completion_tokens != null) {
+        tokensOut += Number(u.completion_tokens) || 0;
+        hasOut = true;
+      }
     });
+    if (!hasTokens && (hasIn || hasOut)) {
+      tokens = tokensIn + tokensOut;
+      hasTokens = true;
+    }
     const total = t.total_ms || aiMs + zeusMs;
     const other = Math.max(0, total - aiMs - zeusMs);
-    return { total, aiMs, zeusMs, other, tokens, bytes };
+    return {
+      total, aiMs, zeusMs, other, bytes,
+      tokens, tokensIn, tokensOut, hasTokens, hasIn, hasOut,
+    };
+  }
+
+  function fmtTok(n, has) {
+    if (!has) return "?";
+    const num = Number(n);
+    if (!Number.isFinite(num)) return String(n);
+    return Math.round(num).toLocaleString("en-US");
+  }
+
+  /** DaisyUI stats row for token in / out / total. */
+  function tokensStatsHTML(m) {
+    return `<div id="tokens-total" class="trace-total" style="display:flex;align-items:center;justify-content:center;">`
+      + `<div class="stats shadow" title="Token usage (prompt / completion / total)">`
+      + `<div class="stat place-items-center">`
+      + `<div class="stat-title">Token In</div>`
+      + `<div class="stat-value text-primary">${fmtTok(m.tokensIn, m.hasIn)}</div>`
+      + `</div>`
+      + `<div class="stat place-items-center">`
+      + `<div class="stat-title">Token Out</div>`
+      + `<div class="stat-value text-secondary">${fmtTok(m.tokensOut, m.hasOut)}</div>`
+      + `</div>`
+      + `<div class="stat place-items-center">`
+      + `<div class="stat-title">Total Tokens</div>`
+      + `<div class="stat-value text-success">${fmtTok(m.tokens, m.hasTokens)}</div>`
+      + `</div>`
+      + `</div>`
+      + `</div>`;
   }
 
   function buildMetricsRow(t) {
@@ -228,13 +254,12 @@ export function initZeusTrace(root, config = {}) {
       + `<span class="mm-ai">${fmtMs(m.aiMs)}/${pct(m.aiMs)}% AI</span><span class="mm-sep">+</span>`
       + `<span class="mm-zeus">${fmtMs(m.zeusMs)}/${pct(m.zeusMs)}% Zeus</span><span class="mm-sep">+</span>`
       + `<span class="mm-other">${fmtMs(m.other)}/${pct(m.other)}% Other</span>`
-      + `<span class="mm-sep">·</span><span class="mm-meta">Tokens: ${m.tokens || "?"}</span>`
       + `<span class="mm-sep">·</span><span class="mm-meta">Bytes: ${fmtBytes(m.bytes)}</span>`;
     return el;
   }
 
   function renderTraceTotal() {
-    const el = $("trace-total");
+    const el = $("trace-total-wrapper");
     if (!traceTotals.length) {
       el.style.display = "none";
       return;
@@ -246,20 +271,32 @@ export function initZeusTrace(root, config = {}) {
         zeusMs: acc.zeusMs + m.zeusMs,
         other: acc.other + m.other,
         tokens: acc.tokens + m.tokens,
+        tokensIn: acc.tokensIn + m.tokensIn,
+        tokensOut: acc.tokensOut + m.tokensOut,
+        hasTokens: acc.hasTokens || m.hasTokens,
+        hasIn: acc.hasIn || m.hasIn,
+        hasOut: acc.hasOut || m.hasOut,
         bytes: acc.bytes + m.bytes,
       }),
-      { total: 0, aiMs: 0, zeusMs: 0, other: 0, tokens: 0, bytes: 0 }
+      {
+        total: 0, aiMs: 0, zeusMs: 0, other: 0, bytes: 0,
+        tokens: 0, tokensIn: 0, tokensOut: 0,
+        hasTokens: false, hasIn: false, hasOut: false,
+      }
     );
     const sum = a.total || 1;
-    el.style.display = "flex";
+    el.style.display = "block";
     el.innerHTML =
-      `<span class="tt-label">TOTAL · ${traceTotals.length} turn${traceTotals.length === 1 ? "" : "s"}</span>`
+      tokensStatsHTML(a)
+      + `<div id="trace-total" class="trace-total" style="display:flex;align-items:center;justify-content:center;">`
+      + `<span class="tt-label">TOTAL · ${traceTotals.length} turn${traceTotals.length === 1 ? "" : "s"}</span>`
       + `<span class="mm-bar">`
       + `<i class="mm-ai" style="width:${(a.aiMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-zeus" style="width:${(a.zeusMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-other" style="width:${(a.other / sum * 100).toFixed(1)}%"></i>`
       + `</span>`
-      + `<span class="mm-total">${fmtMs(a.total)}</span>`;
+      + `<span class="mm-total">${fmtMs(a.total)}</span>`
+      + `</div>`;
   }
 
   function pipelineSpansFromStep(at, ms, step) {
@@ -521,10 +558,10 @@ export function initZeusTrace(root, config = {}) {
     if (!t) return;
     applyToolOrder(j.tool_order);
     chatId = j.chat_id || chatId;
-    const rid = extractRequestId(j);
-    if (rid) {
-      latestRequestId = rid;
-      updateDebugTitle(rid);
+    const sid = extractSessionId(j);
+    if (sid) {
+      latestSessionId = sid;
+      updateDebugTitle(sid);
     }
     if (!activeTraceEntries.includes(j)) activeTraceEntries.push(j);
     const list = $("trace-list");
@@ -576,7 +613,7 @@ export function initZeusTrace(root, config = {}) {
     navigator.clipboard.writeText(prettyJSON({ chat_id: chatId, traces: shown })).then(() => showToast("Trace copied"));
   });
 
-  updateDebugTitle(latestRequestId);
+  updateDebugTitle(latestSessionId);
 
   const versionEl = $("debug-panel-version");
   if (versionEl) {
