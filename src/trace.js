@@ -229,6 +229,27 @@ export function initZeusTrace(root, config = {}) {
     return Math.round(num).toLocaleString("en-US");
   }
 
+  /**
+   * Integer percentages for parts that always sum to 100 (largest-remainder).
+   * Independent Math.round() on each share often yields 99% or 101%.
+   */
+  function roundPctParts(parts, total) {
+    const sum = Number(total);
+    if (!Number.isFinite(sum) || sum <= 0) return parts.map(() => 0);
+    const raw = parts.map((n) => {
+      const v = Number(n);
+      return ((Number.isFinite(v) && v > 0 ? v : 0) / sum) * 100;
+    });
+    const floors = raw.map((x) => Math.floor(x));
+    let leftover = 100 - floors.reduce((a, b) => a + b, 0);
+    const order = raw
+      .map((x, i) => ({ i, frac: x - floors[i] }))
+      .sort((a, b) => b.frac - a.frac || a.i - b.i);
+    const out = floors.slice();
+    for (let k = 0; k < leftover && k < order.length; k++) out[order[k].i] += 1;
+    return out;
+  }
+
   /** Token In / Out / Total as three colored dashboard tiles. */
   function tokensStatsHTML(m) {
     return `<div id="tokens-total" class="trace-total token-stats-grid" title="Token usage (prompt / completion / total)">`
@@ -252,7 +273,7 @@ export function initZeusTrace(root, config = {}) {
   function buildMetricsRow(t) {
     const m = traceMetrics(t);
     const sum = m.total || 1;
-    const pct = (n) => Math.round(n / sum * 100);
+    const [aiPct, zeusPct, otherPct] = roundPctParts([m.aiMs, m.zeusMs, m.other], m.total);
     const el = document.createElement("div");
     el.className = "msg-metrics";
     el.innerHTML =
@@ -262,10 +283,10 @@ export function initZeusTrace(root, config = {}) {
       + `<i class="mm-other" style="width:${(m.other / sum * 100).toFixed(1)}%"></i>`
       + `</div>`
       + `<div class="mm-row">`
-      + `<span class="mm-ai">${fmtMs(m.aiMs)}/${pct(m.aiMs)}% AI</span>`
+      + `<span class="mm-ai">${fmtMs(m.aiMs)}/${aiPct}% AI</span>`
       + `<div class="mm-legend">`
-      + `<span class="mm-zeus">${fmtMs(m.zeusMs)}/${pct(m.zeusMs)}% Zeus</span>`
-      + `<span class="mm-other">${fmtMs(m.other)}/${pct(m.other)}% Other</span>`
+      + `<span class="mm-zeus">${fmtMs(m.zeusMs)}/${zeusPct}% Zeus</span>`
+      + `<span class="mm-other">${fmtMs(m.other)}/${otherPct}% Other</span>`
       + `<span class="mm-meta">Bytes: ${fmtBytes(m.bytes)}</span>`
       + `</div>`
       + `</div>`;
@@ -713,7 +734,7 @@ export function initZeusTrace(root, config = {}) {
       }
     );
     const sum = a.total || 1;
-    const pct = (n) => Math.round((n / sum) * 100);
+    const [aiPct, zeusPct, otherPct] = roundPctParts([a.aiMs, a.zeusMs, a.other], a.total);
     el.style.display = "flex";
     el.innerHTML =
       tokensStatsHTML(a)
@@ -725,10 +746,10 @@ export function initZeusTrace(root, config = {}) {
       + `<i class="mm-other" style="width:${(a.other / sum * 100).toFixed(1)}%"></i>`
       + `</div>`
       + `<div class="total-progress-meta">`
-      + `<div><span class="mm-ai">${fmtMs(a.aiMs)}</span>/${pct(a.aiMs)}% AI</div>`
+      + `<div><span class="mm-ai">${fmtMs(a.aiMs)}</span>/${aiPct}% AI</div>`
       + `<div class="total-progress-right">`
-      + `<div><span class="mm-zeus">${fmtMs(a.zeusMs)}</span>/${pct(a.zeusMs)}% Zeus</div>`
-      + `<div><span class="mm-other">${fmtMs(a.other)}</span>/${pct(a.other)}% Other</div>`
+      + `<div><span class="mm-zeus">${fmtMs(a.zeusMs)}</span>/${zeusPct}% Zeus</div>`
+      + `<div><span class="mm-other">${fmtMs(a.other)}</span>/${otherPct}% Other</div>`
       + `</div>`
       + `</div>`
       + `</div>`;

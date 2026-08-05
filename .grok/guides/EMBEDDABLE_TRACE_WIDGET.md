@@ -205,6 +205,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-05 | agent | Release v0.1.13: AI/Zeus/Other % labels always sum to 100 (largest-remainder); tighter card/totals padding |
 | 2026-08-05 | agent | Release v0.1.12: fix trace-card-body flex collapse (KPI/Layer A overlap) |
 | 2026-08-05 | agent | Release v0.1.11: tighter panel header + token tile padding; CDN publish |
 | 2026-08-05 | agent | Release v0.1.10: collapsible scrollable trace cards; CDN publish |

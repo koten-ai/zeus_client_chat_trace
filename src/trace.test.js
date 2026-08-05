@@ -480,6 +480,77 @@ describe("initZeusTrace", () => {
     expect(values).toEqual(["28,000", "3,200", "31,200"]);
   });
 
+  function parseSharePcts(scope) {
+    const text = scope?.textContent || "";
+    const ai = Number(text.match(/(\d+)%\s*AI/)?.[1]);
+    const zeus = Number(text.match(/(\d+)%\s*Zeus/)?.[1]);
+    const other = Number(text.match(/(\d+)%\s*Other/)?.[1]);
+    return { ai, zeus, other, sum: ai + zeus + other };
+  }
+
+  it("AI/Zeus/Other percent labels always sum to 100 (not 99 from independent rounding)", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    // Screenshot repro: 8.89s AI + 15ms Zeus + 5.81s Other.
+    // Independent Math.round yields 60+0+39=99; largest-remainder → 60+0+40=100.
+    api.appendTraceCard(
+      "pct sum 100",
+      makeTraceFixture({
+        trace: {
+          rounds: 1,
+          total_ms: 14715,
+          spans: [
+            { name: "ai.chat.round.1", cls: "ai", at: 0, ms: 8890 },
+            { name: "tool.search", cls: "tool", at: 8890, ms: 15 },
+          ],
+          steps: [
+            { type: "llm", round: 1, ms: 8890, finish_reason: "tool_calls", tool_calls: ["search"] },
+            { type: "tool", round: 1, name: "search", status: 200, ms: 15, bytes: 64 },
+          ],
+          ai_requests: [{ model: "gpt-4o-mini" }],
+          tool_calls: [{ name: "search", status: 200 }],
+        },
+      })
+    );
+
+    const cardPct = parseSharePcts(root.querySelector(".msg-metrics"));
+    expect(cardPct).toEqual({ ai: 60, zeus: 0, other: 40, sum: 100 });
+
+    const totalPct = parseSharePcts(root.querySelector("#trace-total.total-progress"));
+    expect(totalPct).toEqual({ ai: 60, zeus: 0, other: 40, sum: 100 });
+  });
+
+  it("share percent labels sum to 100 when one bucket would round up past 100 alone", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    // 2/3 + 1/3 independent round → 67+33=100 already; use 1+1+1 ms equal split → 34+33+33.
+    api.appendTraceCard(
+      "equal thirds",
+      makeTraceFixture({
+        trace: {
+          rounds: 1,
+          total_ms: 3,
+          spans: [
+            { name: "ai.chat.round.1", cls: "ai", at: 0, ms: 1 },
+            { name: "tool.search", cls: "tool", at: 1, ms: 1 },
+          ],
+          steps: [
+            { type: "llm", round: 1, ms: 1, finish_reason: "tool_calls", tool_calls: ["search"] },
+            { type: "tool", round: 1, name: "search", status: 200, ms: 1, bytes: 1 },
+          ],
+          ai_requests: [],
+          tool_calls: [],
+        },
+      })
+    );
+
+    const cardPct = parseSharePcts(root.querySelector(".msg-metrics"));
+    expect(cardPct.sum).toBe(100);
+    expect(cardPct.ai + cardPct.zeus + cardPct.other).toBe(100);
+    // other = total - ai - zeus = 1
+    expect([cardPct.ai, cardPct.zeus, cardPct.other].sort((a, b) => b - a)).toEqual([34, 33, 33]);
+  });
+
   it("shows ? for missing token fields and derives total from in+out", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
 
