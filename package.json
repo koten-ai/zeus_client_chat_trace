@@ -1,6 +1,6 @@
 {
   "name": "zeus_client_chat_trace",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "Embeddable Zeus trace debugger widget",
   "scripts": {

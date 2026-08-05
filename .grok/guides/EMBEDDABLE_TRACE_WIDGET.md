@@ -134,6 +134,7 @@ window.openDebugPanel?.();
 - Chevron (`.tc-chevron`) rotates when collapsed; body is hidden via CSS
 - Not persisted across reloads; new cards start expanded
 - Expanded body is scrollable (`max-height: min(45vh, 480px)`; overflow-y auto) so the card head stays visible while long turn content scrolls
+- **Layout lock (v0.1.12)**: `.trace-card` is `flex-shrink: 0` inside `.trace-list` (avoids head-only clip under `overflow: hidden`). Body direct children are `flex-shrink: 0`; `.tc-kpi-mini` uses `min-height: auto` / `height: auto` so the KPI grid cannot collapse to 0px and paint over Layer A
 
 **Head KPI strip** (inside `div.trace-card-body`, class `stats shadow tc-kpi-mini` — gray tiles + blue value pills):
 
@@ -177,6 +178,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 | JSON dumps show plain pre | jsnview CDN blocked | Allow cdn.jsdelivr.net; pre fallback is expected and still shows data |
 | Early calls lost | Script not async-safe | Use built-in queue (calls before load are buffered) |
 | Styles missing | DaisyUI CDN blocked | Allow cdn.jsdelivr.net (collapse/toast); core chrome is self-contained CSS |
+| KPI tiles / Layer A labels overlap; huge floating numbers | Flex column + `min-height:0` collapsed `.tc-kpi-mini` to 0 while tiles overflow | v0.1.12+ layout lock (`flex-shrink:0` on card/body children; KPI `min-height:auto`) — rebuild/redeploy bundle |
 
 **Debug checklist**:
 - [ ] `ZeusTrace.config.enabled === true` (or open with `?debug=true`)
@@ -203,6 +205,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-05 | agent | Release v0.1.12: fix trace-card-body flex collapse (KPI/Layer A overlap) |
 | 2026-08-05 | agent | Release v0.1.11: tighter panel header + token tile padding; CDN publish |
 | 2026-08-05 | agent | Release v0.1.10: collapsible scrollable trace cards; CDN publish |
 | 2026-08-05 | agent | `.trace-card-body` scrollable: max-height min(45vh, 480px) + overflow-y auto (head stays pinned) |
