@@ -175,7 +175,7 @@ export function initZeusTrace(root, config = {}) {
     let html = "";
     if (cstatus) {
       const kind = cstatus === "match" ? "success" : cstatus === "drift" ? "warning" : "ghost";
-      html += badgePill(kind, `contract:${cstatus}`, sround ? `r${sround}` : "");
+      html += badgePill(kind, `contract:${cstatus}`);
     }
     if (cid) html += badgePill("info", shortId(cid, 14), "");
     if (sdisabled) html += badgePill("ghost", "sessions: off", "");

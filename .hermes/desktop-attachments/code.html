@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zeus Tracer Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-styles">
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    .code-font {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+<!-- BEGIN: Main Dashboard Card -->
+<main class="bg-white rounded-xl shadow-lg max-w-4xl w-full p-6 space-y-6">
+<!-- BEGIN: Header -->
+<header class="flex justify-between items-center pb-4 border-b border-gray-100">
+<div class="flex items-center space-x-2">
+<h1 class="text-xl font-bold text-gray-900">Zeus Tracer</h1>
+<span class="text-gray-400 font-bold">·</span>
+<span class="text-blue-500 font-medium">Detective</span>
+</div>
+<div class="flex items-center space-x-4">
+<button class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+<i class="fa-regular fa-copy"></i>
+<span>Copy All</span>
+</button>
+<button class="text-gray-400 hover:text-gray-600">
+<i class="fa-solid fa-xmark text-xl"></i>
+</button>
+</div>
+</header>
+<!-- END: Header -->
+<!-- BEGIN: Token Stats -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
+<div class="flex items-center space-x-2 text-blue-600 mb-2 text-sm font-medium">
+<i class="fa-solid fa-arrow-right-to-bracket transform -rotate-90"></i>
+<span>Token In</span>
+</div>
+<div class="text-3xl font-bold text-gray-900">15,381</div>
+</div>
+<div class="bg-purple-50 rounded-xl p-4 border border-purple-100">
+<div class="flex items-center space-x-2 text-purple-600 mb-2 text-sm font-medium">
+<i class="fa-solid fa-arrow-right-from-bracket transform rotate-90"></i>
+<span>Token Out</span>
+</div>
+<div class="text-3xl font-bold text-gray-900">327</div>
+</div>
+<div class="bg-green-50 rounded-xl p-4 border border-green-100">
+<div class="flex items-center space-x-2 text-green-600 mb-2 text-sm font-medium">
+<i class="fa-solid fa-database"></i>
+<span>Total Tokens</span>
+</div>
+<div class="text-3xl font-bold text-gray-900">15,812</div>
+</div>
+</section>
+<!-- END: Token Stats -->
+<!-- BEGIN: Total Progress Bar -->
+<section class="space-y-2">
+<div class="text-xs font-bold text-gray-600 uppercase tracking-wide">Total · 1 Turn · 6.88s</div>
+<div class="flex h-2 rounded-full overflow-hidden">
+<div class="bg-orange-500 w-[91%]"></div>
+<div class="bg-teal-400 w-[2%]"></div>
+<div class="bg-gray-300 w-[7%]"></div>
+</div>
+<div class="flex justify-between text-xs text-gray-500">
+<div><span class="text-orange-500 font-medium">6.24s</span>/91% AI</div>
+<div class="flex space-x-4 text-right">
+<div><span class="font-medium text-teal-600">145ms</span>/2% Zeus</div>
+<div><span class="font-medium">492ms</span>/7% Other</div>
+</div>
+</div>
+</section>
+<!-- END: Total Progress Bar -->
+<!-- BEGIN: Session Details -->
+<section class="border border-gray-200 rounded-xl overflow-hidden">
+<div class="bg-blue-50/50 p-4 border-b border-gray-200 flex justify-between items-center cursor-pointer">
+<div>
+<h2 class="text-lg font-bold text-gray-900 mb-1">#1 Highly recommended salon in Tampa</h2>
+<div class="text-xs text-gray-500 font-medium">
+            v2 · yelp-demo/_default/_default · 1 rounds
+          </div>
+</div>
+<i class="fa-solid fa-chevron-up text-gray-400"></i>
+</div>
+<div class="p-4 space-y-6">
+<!-- Badges -->
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center bg-green-500 text-white text-xs rounded-full overflow-hidden">
+<span class="px-2 py-1 font-medium">contract:match</span>
+</div>
+<div class="flex items-center bg-blue-600 text-white text-xs rounded-full overflow-hidden">
+<span class="px-2 py-1 font-medium">analytics_v2_s...</span>
+</div>
+<div class="flex items-center bg-gray-600 text-white text-xs rounded-full overflow-hidden">
+<span class="px-2 py-1 font-medium">sess:sess_20260...</span>
+<span class="bg-gray-700 px-2 py-1">r2</span>
+</div>
+</div>
+<!-- Metric Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Mini-Schema</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">Yes</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Scope Brief</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">Yes</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">LLM Rounds</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">1</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Tool Calls</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">1</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Avg / Round</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">1</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Avg / Round</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">6.88s</span>
+</div>
+<div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+<div class="text-[10px] font-bold text-gray-500 mb-2 uppercase">Edges</div>
+<span class="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">350</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Session Details -->
+<!-- BEGIN: Layer A -->
+<section class="space-y-4 pt-2">
+<div class="flex items-center space-x-2">
+<h3 class="text-xs font-bold text-gray-800 uppercase">Layer A</h3>
+<span class="text-xs text-gray-500 code-font">structured_response.layer_a</span>
+</div>
+<div class="flex flex-wrap gap-2 text-xs">
+<div class="flex items-center rounded overflow-hidden">
+<span class="bg-gray-600 text-white font-semibold px-2 py-1 uppercase text-[10px]">Confidence</span>
+<span class="bg-yellow-100 text-yellow-800 font-medium px-2 py-1">mod</span>
+</div>
+<div class="flex items-center rounded overflow-hidden">
+<span class="bg-gray-600 text-white font-semibold px-2 py-1 uppercase text-[10px]">Policy</span>
+<span class="bg-blue-100 text-blue-800 font-medium px-2 py-1">answer</span>
+</div>
+<div class="flex items-center rounded overflow-hidden">
+<span class="bg-gray-600 text-white font-semibold px-2 py-1 uppercase text-[10px]">Intent</span>
+<span class="bg-gray-200 text-gray-700 font-medium px-2 py-1">List</span>
+</div>
+<div class="flex items-center rounded overflow-hidden">
+<span class="bg-gray-600 text-white font-semibold px-2 py-1 uppercase text-[10px]">Output</span>
+<span class="bg-gray-200 text-gray-700 font-medium px-2 py-1">rows</span>
+</div>
+<div class="flex items-center rounded overflow-hidden">
+<span class="bg-green-500 text-white font-semibold px-2 py-1 uppercase text-[10px]">OK</span>
+<span class="bg-green-100 text-green-800 font-medium px-2 py-1">true</span>
+</div>
+</div>
+<!-- Code Blocks -->
+<div class="border border-gray-200 rounded-xl p-4 space-y-6 bg-white">
+<div>
+<h4 class="text-[10px] font-bold text-gray-700 uppercase mb-2">Query_Decomposition</h4>
+<pre class="bg-gray-50 p-4 rounded-lg text-gray-700 code-font overflow-x-auto text-xs">entities: {[Tampsomo, App typerecommended]},
+geo: {the Tampa},
+theme: {nation},
+other: {nterest, with Zava, sess:sess}</pre>
+</div>
+<div>
+<h4 class="text-[10px] font-bold text-gray-700 uppercase mb-2">Decomposition</h4>
+<pre class="bg-gray-50 p-4 rounded-lg text-gray-700 code-font overflow-x-auto text-xs">targets/predicates: {
+  predicate: [entity],
+  predicates: ["chat_targets"]
+}</pre>
+</div>
+</div>
+</section>
+<!-- END: Layer A -->
+<!-- BEGIN: Footer Progress -->
+<section class="space-y-3 pt-4 border-t border-gray-100">
+<div class="flex items-center text-xs">
+<div class="w-32 text-gray-500">auth.resolve</div>
+<div class="flex-1 flex h-1.5 rounded-full overflow-hidden bg-gray-100 mx-4">
+<div class="bg-blue-500 w-[15%] border-r border-white"></div>
+<div class="bg-blue-500 w-[45%] border-r border-white"></div>
+<div class="bg-blue-500 w-[20%]"></div>
+</div>
+<div class="w-16 text-right text-gray-600 font-medium">22h.44s</div>
+</div>
+<div class="flex items-center text-xs">
+<div class="w-32 text-gray-500">chat_request_load</div>
+<div class="flex-1 flex h-1.5 rounded-full overflow-hidden bg-gray-100 mx-4">
+<div class="ml-auto flex w-[15%]">
+<div class="bg-teal-400 w-1/3 border-r border-white"></div>
+<div class="bg-teal-400 w-2/3"></div>
+</div>
+</div>
+<div class="w-16 text-right text-gray-400 bg-gray-100 rounded px-1 font-mono text-[10px]">v0.1.8</div>
+</div>
+</section>
+<!-- END: Footer Progress -->
+</main>
+<!-- END: Main Dashboard Card -->
+</body></html>
