@@ -152,6 +152,18 @@ export function initZeusTrace(root, config = {}) {
     }
   }
 
+  function badgePill(kind, main, tail) {
+    const tailHtml = tail
+      ? `<span class="bp-tail">${escapeHtml(String(tail))}</span>`
+      : "";
+    return (
+      `<div class="badge-pill bp-${kind}">`
+      + `<span>${escapeHtml(String(main))}</span>`
+      + tailHtml
+      + `</div>`
+    );
+  }
+
   function contractSessionBadges(j, t) {
     const sess = (t && t.session) || {};
     const sid = j.session_id || sess.id;
@@ -162,15 +174,14 @@ export function initZeusTrace(root, config = {}) {
     const sdisabled = !!(sess && sess.disabled);
     let html = "";
     if (cstatus) {
-      const cls = cstatus === "match" ? "badge-success" : cstatus === "drift" ? "badge-warning" : "badge-ghost";
-      html += `<span class="badge badge-sm ${cls}">contract:${escapeHtml(cstatus)}</span>`;
+      const kind = cstatus === "match" ? "success" : cstatus === "drift" ? "warning" : "ghost";
+      html += badgePill(kind, `contract:${cstatus}`, sround ? `r${sround}` : "");
     }
-    if (cid) html += `<span class="badge badge-sm badge-info">${escapeHtml(shortId(cid, 14))}</span>`;
-    if (sdisabled) html += `<span class="badge badge-sm badge-ghost">sessions: off</span>`;
-    else if (serr) html += `<span class="badge badge-sm badge-error">session: failed</span>`;
+    if (cid) html += badgePill("info", shortId(cid, 14), "");
+    if (sdisabled) html += badgePill("ghost", "sessions: off", "");
+    else if (serr) html += badgePill("error", "session: failed", "");
     else if (sid) {
-      const r = sround ? ` r${sround}` : "";
-      html += `<span class="badge badge-sm badge-ghost">sess:${escapeHtml(shortId(sid))}${r}</span>`;
+      html += badgePill("ghost", `sess:${shortId(sid)}`, sround ? `r${sround}` : "");
     }
     return html;
   }
@@ -218,19 +229,19 @@ export function initZeusTrace(root, config = {}) {
     return Math.round(num).toLocaleString("en-US");
   }
 
-  /** DaisyUI stats row for token in / out / total. */
+  /** Token In / Out / Total as three colored dashboard tiles. */
   function tokensStatsHTML(m) {
-    return `<div id="tokens-total" class="trace-total" style="display:flex;align-items:center;justify-content:center;">`
-      + `<div class="stats shadow" title="Token usage (prompt / completion / total)">`
-      + `<div class="stat place-items-center">`
+    return `<div id="tokens-total" class="trace-total token-stats-grid" title="Token usage (prompt / completion / total)">`
+      + `<div class="stats shadow">`
+      + `<div class="stat place-items-center token-stat-card token-in">`
       + `<div class="stat-title">Token In</div>`
       + `<div class="stat-value text-primary">${fmtTok(m.tokensIn, m.hasIn)}</div>`
       + `</div>`
-      + `<div class="stat place-items-center">`
+      + `<div class="stat place-items-center token-stat-card token-out">`
       + `<div class="stat-title">Token Out</div>`
       + `<div class="stat-value text-secondary">${fmtTok(m.tokensOut, m.hasOut)}</div>`
       + `</div>`
-      + `<div class="stat place-items-center">`
+      + `<div class="stat place-items-center token-stat-card token-all">`
       + `<div class="stat-title">Total Tokens</div>`
       + `<div class="stat-value text-success">${fmtTok(m.tokens, m.hasTokens)}</div>`
       + `</div>`
@@ -245,16 +256,433 @@ export function initZeusTrace(root, config = {}) {
     const el = document.createElement("div");
     el.className = "msg-metrics";
     el.innerHTML =
-      `<span class="mm-bar">`
+      `<div class="mm-bar">`
       + `<i class="mm-ai" style="width:${(m.aiMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-zeus" style="width:${(m.zeusMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-other" style="width:${(m.other / sum * 100).toFixed(1)}%"></i>`
-      + `</span>`
-      + `<span class="mm-total">${fmtMs(m.total)}</span><span class="mm-sep">=</span>`
-      + `<span class="mm-ai">${fmtMs(m.aiMs)}/${pct(m.aiMs)}% AI</span><span class="mm-sep">+</span>`
-      + `<span class="mm-zeus">${fmtMs(m.zeusMs)}/${pct(m.zeusMs)}% Zeus</span><span class="mm-sep">+</span>`
+      + `</div>`
+      + `<div class="mm-row">`
+      + `<span class="mm-ai">${fmtMs(m.aiMs)}/${pct(m.aiMs)}% AI</span>`
+      + `<div class="mm-legend">`
+      + `<span class="mm-zeus">${fmtMs(m.zeusMs)}/${pct(m.zeusMs)}% Zeus</span>`
       + `<span class="mm-other">${fmtMs(m.other)}/${pct(m.other)}% Other</span>`
-      + `<span class="mm-sep">·</span><span class="mm-meta">Bytes: ${fmtBytes(m.bytes)}</span>`;
+      + `<span class="mm-meta">Bytes: ${fmtBytes(m.bytes)}</span>`
+      + `</div>`
+      + `</div>`;
+    return el;
+  }
+
+  /** System / catalog text used for inject flags + edges_total parse. */
+  function systemTextFromTrace(t) {
+    if (!t || typeof t !== "object") return "";
+    const cat = t.catalog && typeof t.catalog === "object" ? t.catalog : null;
+    const sm = cat?.system_message;
+    if (sm && typeof sm === "object" && sm.content != null) return String(sm.content);
+    if (typeof sm === "string") return sm;
+    if (cat?.system_message_content != null) return String(cat.system_message_content);
+    const det = t.detective && typeof t.detective === "object" ? t.detective : null;
+    const inj = det?.prompt?.inject;
+    if (inj && typeof inj === "object") {
+      if (inj.system_preview) return String(inj.system_preview);
+      if (inj.brief_preview) return String(inj.brief_preview);
+    }
+    // First AI request system message (when catalog omitted).
+    for (const req of t.ai_requests || []) {
+      const msgs = req?.messages || req?.body?.messages || [];
+      if (!Array.isArray(msgs)) continue;
+      for (const m of msgs) {
+        if (m && m.role === "system" && m.content != null) return String(m.content);
+      }
+    }
+    return "";
+  }
+
+  function parseEdgesTotal(text) {
+    if (!text) return null;
+    const m = /edges_total:\s*(\d+)/i.exec(text);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /**
+   * Head KPI strip: inject presence + turn shape (Hub Detective kpi-mini parity).
+   * Labels fixed: MINI-SCHEMA, SCOPE BRIEF, LLM Rounds, Tool Calls, Avg / round, Edges.
+   */
+  function cardHeadStats(t) {
+    const catalog = t?.catalog && typeof t.catalog === "object" ? t.catalog : {};
+    const detInj =
+      t?.detective?.prompt?.inject && typeof t.detective.prompt.inject === "object"
+        ? t.detective.prompt.inject
+        : {};
+    const sys = systemTextFromTrace(t);
+
+    const hasMini =
+      catalog.has_mini_schema === true ||
+      detInj.has_mini_schema === true ||
+      /##\s*MINI-SCHEMA\b/i.test(sys);
+    const hasBrief =
+      catalog.has_scope_brief === true ||
+      detInj.has_scope_brief === true ||
+      /##\s*SCOPE BRIEF\b/i.test(sys);
+
+    let llmRounds = Number(t?.rounds);
+    if (!Number.isFinite(llmRounds) || llmRounds <= 0) {
+      const fromSteps = (t?.steps || []).filter((s) => s && (s.type === "llm" || s.type === "llm_error")).length;
+      const fromReqs = Array.isArray(t?.ai_requests) ? t.ai_requests.length : 0;
+      llmRounds = fromSteps || fromReqs || 0;
+    }
+
+    let toolCalls = Array.isArray(t?.tool_calls) ? t.tool_calls.length : 0;
+    if (!toolCalls) {
+      toolCalls = (t?.steps || []).filter((s) => s && s.type === "tool").length;
+    }
+
+    const totalMs = Number(t?.total_ms);
+    const wall = Number.isFinite(totalMs) && totalMs > 0
+      ? totalMs
+      : (t?.steps || []).reduce((a, s) => a + (Number(s?.ms) || 0), 0);
+    let avgRoundSec = null;
+    if (llmRounds > 0 && wall > 0) {
+      avgRoundSec = wall / llmRounds / 1000;
+    }
+
+    const edges = parseEdgesTotal(sys);
+
+    return {
+      hasMiniSchema: hasMini,
+      hasScopeBrief: hasBrief,
+      llmRounds,
+      toolCalls,
+      avgRoundSec,
+      edges,
+    };
+  }
+
+  function fmtAvgRoundSec(sec) {
+    if (sec == null || !Number.isFinite(sec)) return "—";
+    if (sec < 0.01) return `${(sec * 1000).toFixed(0)}ms`;
+    if (sec < 10) return `${sec.toFixed(2)}s`;
+    return `${sec.toFixed(1)}s`;
+  }
+
+  function buildCardHeadStatsEl(t) {
+    const s = cardHeadStats(t);
+    const tips = {
+      mini: "MINI-SCHEMA section present in system / catalog inject",
+      brief: "SCOPE BRIEF section present in system / catalog inject",
+      rounds: "Upstream LLM completion rounds this turn",
+      tools: "Total Zeus tool invocations this turn",
+      avg: "Wall time ÷ LLM rounds (seconds)",
+      edges: "edges_total parsed from SCOPE BRIEF (scope inventory, not this-turn graph rows)",
+    };
+    /** Compact DaisyUI stat cell (smaller than #tokens-total). */
+    const tile = (lbl, val, tip) =>
+      `<div class="stat place-items-center" title="${escapeHtml(tip)}">`
+      + `<div class="stat-title">${escapeHtml(lbl)}</div>`
+      + `<div class="stat-value">${escapeHtml(String(val))}</div>`
+      + `</div>`;
+
+    const edgesVal = s.edges != null ? Number(s.edges).toLocaleString("en-US") : "—";
+    const el = document.createElement("div");
+    el.className = "stats shadow tc-kpi-mini";
+    el.setAttribute("aria-label", "Turn inject and shape stats");
+    el.innerHTML =
+      tile("MINI-SCHEMA", s.hasMiniSchema ? "Yes" : "No", tips.mini)
+      + tile("SCOPE BRIEF", s.hasScopeBrief ? "Yes" : "No", tips.brief)
+      + tile("LLM Rounds", String(s.llmRounds), tips.rounds)
+      + tile("Tool Calls", String(s.toolCalls), tips.tools)
+      + tile("Avg / round", fmtAvgRoundSec(s.avgRoundSec), tips.avg)
+      + tile("Edges", edgesVal, tips.edges);
+    return el;
+  }
+
+  /** True when obj looks like a base-5 Layer A terminate bag. */
+  function looksLikeLayerA(obj) {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
+    return (
+      obj.summary != null ||
+      obj.query_decomposition != null ||
+      obj.decomposition != null ||
+      obj.confidence != null ||
+      obj.policy_action != null
+    );
+  }
+
+  function layerABagFromArgs(args) {
+    if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+    if (
+      args.summary != null ||
+      args.query_decomposition != null ||
+      args.decomposition != null ||
+      args.confidence != null ||
+      args.policy_action != null ||
+      args.turn_complete === true
+    ) {
+      return args;
+    }
+    return null;
+  }
+
+  /**
+   * Harvest Layer A from response envelope + trace terminate steps.
+   * Priority matches client/Detective: explicit bag → structured_response →
+   * return/return_result/pipeline steps → tool_calls → flat top-level keys.
+   */
+  function extractLayerA(j, t) {
+    const jObj = j && typeof j === "object" ? j : {};
+    const tObj = t && typeof t === "object" ? t : {};
+
+    const take = (src, via) => {
+      if (!looksLikeLayerA(src) && !(src && typeof src === "object" && src.turn_complete === true)) {
+        return null;
+      }
+      return { ...src, via: src.via || via };
+    };
+
+    if (jObj.layer_a && typeof jObj.layer_a === "object") {
+      const hit = take(jObj.layer_a, "response.layer_a");
+      if (hit) return hit;
+    }
+
+    const sr = jObj.structured_response;
+    if (sr && typeof sr === "object") {
+      if (sr.layer_a && typeof sr.layer_a === "object") {
+        const hit = take(sr.layer_a, "structured_response.layer_a");
+        if (hit) return hit;
+      }
+      const hit = take(sr, "structured_response");
+      if (hit) return hit;
+    }
+
+    const steps = Array.isArray(tObj.steps) ? tObj.steps : [];
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const s = steps[i];
+      if (!s || typeof s !== "object") continue;
+      const stype = String(s.type || "").toLowerCase();
+      const name = String(s.name || "").toLowerCase();
+      const args = s.args && typeof s.args === "object" ? s.args : null;
+
+      if (stype === "return" || stype === "return_result") {
+        const bag = layerABagFromArgs(args);
+        if (bag) return { ...bag, via: bag.via || stype };
+      }
+      if (stype === "tool" && name === "pipeline") {
+        const bag = layerABagFromArgs(args);
+        if (bag) return { ...bag, via: bag.via || "pipeline" };
+        const pipe = s.pipeline_json && typeof s.pipeline_json === "object" ? s.pipeline_json : null;
+        const fromPipe = layerABagFromArgs(pipe);
+        if (fromPipe) return { ...fromPipe, via: fromPipe.via || "pipeline_json" };
+      }
+    }
+
+    const toolCalls = Array.isArray(tObj.tool_calls) ? tObj.tool_calls : [];
+    for (let i = toolCalls.length - 1; i >= 0; i--) {
+      const tc = toolCalls[i];
+      if (!tc || typeof tc !== "object") continue;
+      if (String(tc.name || "").toLowerCase() !== "pipeline") continue;
+      const bag = layerABagFromArgs(tc.args);
+      if (bag) return { ...bag, via: bag.via || "tool_calls.pipeline" };
+    }
+
+    // Flat top-level keys on the search response (some hosts hoist Layer A).
+    if (looksLikeLayerA(jObj)) {
+      return {
+        summary: jObj.summary,
+        query_decomposition: jObj.query_decomposition,
+        decomposition: jObj.decomposition,
+        confidence: jObj.confidence,
+        policy_action: jObj.policy_action,
+        business_rules_triggers: jObj.business_rules_triggers,
+        app_output: jObj.app_output,
+        jail_break_attempt: jObj.jail_break_attempt,
+        via: "response",
+      };
+    }
+
+    return null;
+  }
+
+  function formatLayerAValue(v) {
+    if (v == null) return "";
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+    if (Array.isArray(v)) {
+      if (!v.length) return "[]";
+      if (v.every((x) => typeof x === "string" || typeof x === "number" || typeof x === "boolean")) {
+        return v.join(", ");
+      }
+    }
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+
+  function layerAStat(title, value, opts = {}) {
+    if (value == null || value === "") return "";
+    const valStr = formatLayerAValue(value);
+    if (!valStr) return "";
+    const valueCls = opts.valueClass ? ` ${opts.valueClass}` : "";
+    const extraStatCls = opts.statClass ? ` ${opts.statClass}` : "";
+    const desc = opts.desc
+      ? `<div class="stat-desc">${escapeHtml(opts.desc)}</div>`
+      : "";
+    const tip = opts.titleAttr
+      ? ` title="${escapeHtml(opts.titleAttr)}"`
+      : ` title="${escapeHtml(title)}: ${escapeHtml(valStr)}"`;
+    return (
+      `<div class="stat place-items-center${extraStatCls}"${tip}>`
+      + `<div class="stat-title">${escapeHtml(title)}</div>`
+      + `<div class="stat-value${valueCls}">${escapeHtml(valStr)}</div>`
+      + desc
+      + `</div>`
+    );
+  }
+
+  /** Pretty-print a Layer A object/array for the code-block view. */
+  function formatLayerACode(obj) {
+    if (obj == null) return "";
+    try {
+      return JSON.stringify(obj, null, 2);
+    } catch {
+      return String(obj);
+    }
+  }
+
+  function layerAStatsRow(statsHtml, extraClass = "") {
+    if (!statsHtml) return "";
+    const cls = extraClass ? ` stats shadow la-stats ${extraClass}` : " stats shadow la-stats";
+    return `<div class="${cls.trim()}">${statsHtml}</div>`;
+  }
+
+  function confidenceValueClass(c) {
+    const s = String(c || "").toLowerCase();
+    if (s === "high") return "text-success";
+    if (s === "med" || s === "medium") return "text-warning";
+    if (s === "low") return "text-error";
+    return "text-success";
+  }
+
+  function policyValueClass(p) {
+    const s = String(p || "").toLowerCase();
+    if (s === "answer") return "text-success";
+    if (s === "clarify") return "text-warning";
+    if (s === "refuse" || s === "error") return "text-error";
+    return "text-warning";
+  }
+
+  /**
+   * Layer A terminate: primary key|value pills + code blocks for
+   * query_decomposition / decomposition (mockup dashboard layout).
+   */
+  function buildLayerAEl(la) {
+    if (!la || typeof la !== "object") return null;
+
+    const qd = la.query_decomposition && typeof la.query_decomposition === "object"
+      ? la.query_decomposition
+      : null;
+    const dd = la.decomposition && typeof la.decomposition === "object"
+      ? la.decomposition
+      : null;
+
+    let intent = la.intent;
+    if (intent == null && qd && qd.intent != null) intent = qd.intent;
+    if (intent && typeof intent === "object" && intent.goal != null) intent = intent.goal;
+
+    const predicates = dd && dd.predicates != null ? dd.predicates : la.predicates;
+    const output = dd && dd.output != null ? dd.output : la.output;
+    const targets = dd && Array.isArray(dd.targets) ? dd.targets : null;
+
+    // Primary KPI row — scannable pill strip
+    let primary = "";
+    primary += layerAStat("Confidence", la.confidence, {
+      valueClass: confidenceValueClass(la.confidence),
+    });
+    primary += layerAStat("Policy", la.policy_action, {
+      valueClass: policyValueClass(la.policy_action),
+      titleAttr: "policy_action",
+    });
+    primary += layerAStat("Intent", intent, {
+      valueClass: "text-primary",
+      titleAttr: "query_decomposition.intent",
+    });
+    primary += layerAStat("Output", output, {
+      valueClass: "text-secondary",
+      titleAttr: "decomposition.output",
+    });
+    if (la.ok === true) {
+      primary += layerAStat("OK", "true", {
+        valueClass: "text-success",
+        statClass: "la-ok",
+      });
+    } else if (la.ok === false) {
+      primary += layerAStat("OK", "false", {
+        valueClass: "text-error",
+        statClass: "la-ok-false",
+      });
+    }
+
+    // Code blocks for QD + decomposition (dashboard mockup)
+    let codeSections = "";
+    if (qd && Object.keys(qd).length) {
+      codeSections +=
+        `<div class="la-code-section">`
+        + `<h4>query_decomposition</h4>`
+        + `<pre class="code-font">${escapeHtml(formatLayerACode(qd))}</pre>`
+        + `</div>`;
+    }
+
+    // Build a decomp view that always surfaces Targets / Predicates labels for operators + tests
+    if (dd || targets || predicates != null) {
+      const decompView = {};
+      if (targets && targets.length) decompView.Targets = targets;
+      if (predicates != null) decompView.Predicates = predicates;
+      if (dd) {
+        Object.keys(dd).forEach((k) => {
+          if (k === "targets" || k === "predicates") return;
+          decompView[k] = dd[k];
+        });
+      }
+      if (Object.keys(decompView).length) {
+        codeSections +=
+          `<div class="la-code-section">`
+          + `<h4>decomposition</h4>`
+          + `<pre class="code-font">${escapeHtml(formatLayerACode(decompView))}</pre>`
+          + `</div>`;
+      }
+    }
+
+    // business_rules_triggers as compact stats tiles
+    let triggerStats = "";
+    if (la.business_rules_triggers && typeof la.business_rules_triggers === "object"
+        && !Array.isArray(la.business_rules_triggers)) {
+      Object.keys(la.business_rules_triggers).forEach((tk) => {
+        const on = !!la.business_rules_triggers[tk];
+        triggerStats += layerAStat(tk, on ? "true" : "false", {
+          valueClass: on ? "text-success text-sm la-stat-sm" : "text-sm la-stat-sm",
+          titleAttr: `business_rules_triggers.${tk}`,
+        });
+      });
+    }
+
+    // summary is kept on the harvested bag / JSON dump only — not rendered in the panel
+    if (!primary && !codeSections && !triggerStats) return null;
+
+    const via = la.via ? String(la.via) : "";
+    const el = document.createElement("div");
+    el.className = "layer-a-panel";
+    el.setAttribute("aria-label", "Layer A terminate");
+    el.innerHTML =
+      `<div class="la-heading">`
+      + `<span class="la-title">Layer A</span>`
+      + (via ? `<span class="la-via" title="source">${escapeHtml(via)}</span>` : "")
+      + `</div>`
+      + layerAStatsRow(primary, "la-stats-primary")
+      + (codeSections ? `<div class="la-code-block">${codeSections}</div>` : "")
+      + (triggerStats
+        ? `<div class="la-section-label">business_rules_triggers</div>${layerAStatsRow(triggerStats, "la-stats-triggers")}`
+        : "");
     return el;
   }
 
@@ -285,17 +713,24 @@ export function initZeusTrace(root, config = {}) {
       }
     );
     const sum = a.total || 1;
-    el.style.display = "block";
+    const pct = (n) => Math.round((n / sum) * 100);
+    el.style.display = "flex";
     el.innerHTML =
       tokensStatsHTML(a)
-      + `<div id="trace-total" class="trace-total" style="display:flex;align-items:center;justify-content:center;">`
-      + `<span class="tt-label">TOTAL · ${traceTotals.length} turn${traceTotals.length === 1 ? "" : "s"}</span>`
-      + `<span class="mm-bar">`
+      + `<div id="trace-total" class="trace-total total-progress" style="display:flex;">`
+      + `<div class="tt-label">Total · ${traceTotals.length} Turn${traceTotals.length === 1 ? "" : "s"} · ${fmtMs(a.total)}</div>`
+      + `<div class="mm-bar">`
       + `<i class="mm-ai" style="width:${(a.aiMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-zeus" style="width:${(a.zeusMs / sum * 100).toFixed(1)}%"></i>`
       + `<i class="mm-other" style="width:${(a.other / sum * 100).toFixed(1)}%"></i>`
-      + `</span>`
-      + `<span class="mm-total">${fmtMs(a.total)}</span>`
+      + `</div>`
+      + `<div class="total-progress-meta">`
+      + `<div><span class="mm-ai">${fmtMs(a.aiMs)}</span>/${pct(a.aiMs)}% AI</div>`
+      + `<div class="total-progress-right">`
+      + `<div><span class="mm-zeus">${fmtMs(a.zeusMs)}</span>/${pct(a.zeusMs)}% Zeus</div>`
+      + `<div><span class="mm-other">${fmtMs(a.other)}</span>/${pct(a.other)}% Other</div>`
+      + `</div>`
+      + `</div>`
       + `</div>`;
   }
 
@@ -356,10 +791,15 @@ export function initZeusTrace(root, config = {}) {
       const left = Math.max(0, Math.min(100, (s.at || 0) / sum * 100));
       const w = Math.max(0.5, Math.min(100 - left, (s.ms || 0) / sum * 100));
       const labCls = s.pipeline ? "tw-lab tw-lab-pipeline" : "tw-lab";
+      const durLabel = s.ms >= 1000
+        ? `${(s.ms / 1000).toFixed(2)}s`
+        : `${s.ms || 0}ms`;
       html +=
-        `<div class="${labCls}" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</div>`
+        `<div class="tw-row">`
+        + `<div class="${labCls}" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</div>`
         + `<div class="tw-track"><i class="${s.cls}" style="left:${left.toFixed(2)}%;width:${w.toFixed(2)}%"></i></div>`
-        + `<div class="tw-dur">${s.ms || 0} ms</div>`;
+        + `<div class="tw-dur">${durLabel}</div>`
+        + `</div>`;
     });
     html += `</div>`;
     return html;
@@ -525,7 +965,7 @@ export function initZeusTrace(root, config = {}) {
     return `${count} round${count === 1 ? "" : "s"}`;
   }
 
-  async function appendTraceDump(card, question, j, t) {
+  async function appendTraceDump(card, question, j, t, layerA) {
     const wrap = document.createElement("div");
     wrap.className = "trace-dump-wrap";
     // Attach immediately so dump titles stay visible even if jsnview hangs/fails.
@@ -534,12 +974,15 @@ export function initZeusTrace(root, config = {}) {
     const aiReqs = t.ai_requests || [];
     const aiResps = t.ai_responses || [];
     const toolCalls = t.tool_calls || [];
-
-    // Mount dumps in parallel; each section already has a sync title + fallback pre.
-    await Promise.all([
+    const dumps = [
       appendJSONDetails(wrap, `AI requests · ${roundLabel(aiReqs)}`, aiReqs),
       appendJSONDetails(wrap, `AI responses · ${roundLabel(aiResps)}`, aiResps),
       appendJSONDetails(wrap, `Tool calls · ${toolCalls.length}`, toolCalls, toolCalls.length > 0),
+    ];
+    if (layerA) {
+      dumps.push(appendJSONDetails(wrap, "Layer A", layerA, true));
+    }
+    dumps.push(
       appendJSONDetails(wrap, "Raw turn bundle", {
         question,
         answer: j.answer,
@@ -548,9 +991,13 @@ export function initZeusTrace(root, config = {}) {
         session_id: j.session_id,
         session_round: j.session_round,
         contract_status: j.contract_status,
+        layer_a: layerA || j.layer_a || j.structured_response?.layer_a || undefined,
         trace: t,
-      }),
-    ]);
+      })
+    );
+
+    // Mount dumps in parallel; each section already has a sync title + fallback pre.
+    await Promise.all(dumps);
   }
 
   function appendTraceCard(question, j) {
@@ -573,26 +1020,49 @@ export function initZeusTrace(root, config = {}) {
     card.className = "trace-card";
     const head = document.createElement("div");
     head.className = "trace-card-head";
+    const apiLabel = apiValue(j.api_version || t.api_version);
     head.innerHTML =
-      `<span class="tc-n">#${traceTurn}</span>`
+      `<div class="trace-card-head-main">`
+      + `<div class="tc-title-line">`
+      + `<span class="tc-n">#${traceTurn}</span>`
       + `<span class="tc-q" title="${escapeHtml(question)}">${escapeHtml(question)}</span>`
-      + `<span class="tc-meta">${escapeHtml(apiValue(j.api_version || t.api_version).toUpperCase())} · ${escapeHtml(j.target || "")} · ${t.rounds || 0} rounds</span>`
-      + (contractSessionBadges(j, t) ? `<span class="tc-badges">${contractSessionBadges(j, t)}</span>` : "");
+      + `</div>`
+      + `<div class="tc-meta">${escapeHtml(apiLabel.toUpperCase())} · ${escapeHtml(j.target || "")} · ${t.rounds || 0} rounds</div>`
+      + `</div>`;
     card.appendChild(head);
-    card.appendChild(buildMetricsRow(t));
+
+    const body = document.createElement("div");
+    body.className = "trace-card-body";
+
+    const badgesHtml = contractSessionBadges(j, t);
+    if (badgesHtml) {
+      const badges = document.createElement("div");
+      badges.className = "tc-badges";
+      badges.innerHTML = badgesHtml;
+      body.appendChild(badges);
+    }
+
+    body.appendChild(buildCardHeadStatsEl(t));
+
+    const layerA = extractLayerA(j, t);
+    const layerAEl = buildLayerAEl(layerA);
+    if (layerAEl) body.appendChild(layerAEl);
+
+    body.appendChild(buildMetricsRow(t));
 
     const wf = document.createElement("div");
     wf.innerHTML = waterfallHTML(t.spans, t.total_ms, t.steps);
-    if (wf.firstChild) card.appendChild(wf.firstChild);
+    if (wf.firstChild) body.appendChild(wf.firstChild);
 
     const vbar = document.createElement("div");
     vbar.innerHTML = toolFrequencyChartHTML(t.steps, j.api_version || t.api_version || "v2");
-    if (vbar.firstChild) card.appendChild(vbar.firstChild);
+    if (vbar.firstChild) body.appendChild(vbar.firstChild);
 
     const detailText = traceText(t);
-    if (detailText) appendTextDetails(card, "Hash Traces", detailText);
+    if (detailText) appendTextDetails(body, "Hash Traces", detailText);
 
-    appendTraceDump(card, question, j, t);
+    appendTraceDump(body, question, j, t, layerA);
+    card.appendChild(body);
     list.prepend(card);
     traceTotals.push(traceMetrics(t));
     while (list.children.length > TRACE_MAX_CARDS) {

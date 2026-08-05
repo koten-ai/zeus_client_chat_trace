@@ -5,3 +5,5 @@ terminals/
 node_modules/
 dist/
 .env
+# local Spaces/CDN credentials
+.secrets/

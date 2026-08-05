@@ -52,34 +52,61 @@
     const fixture = {
       chat_id: "demo-chat-1",
       session_id: "demo-sess-001",
+      session_round: 2,
+      contract_status: "match",
+      contract_id: "analytics_v2_sample",
       api_version: "v2",
-      target: "demo",
+      target: "yelp-demo/_default/_default",
       answer: "Paris is lovely in spring.",
+      layer_a: {
+        confidence: "med",
+        policy_action: "answer",
+        ok: true,
+        query_decomposition: {
+          intent: "List",
+          entity: "Business",
+          geo: "Tampa",
+          theme: "salon",
+        },
+        decomposition: {
+          targets: [{ entity_type: "Business", focus: ["name", "stars", "review_count"] }],
+          predicates: { city: "Tampa", categories: "salon" },
+          output: "rows",
+        },
+      },
       trace: {
         rounds: 2,
-        total_ms: 1250,
+        total_ms: 6880,
         spans: [
-          { name: "llm.round1", cls: "ai", at: 0, ms: 320 },
-          { name: "tool.search", cls: "tool", at: 320, ms: 410 },
-          { name: "llm.round2", cls: "ai", at: 730, ms: 280 },
-          { name: "tool.pipeline", cls: "tool", at: 1010, ms: 240 },
+          { name: "llm.round1", cls: "ai", at: 0, ms: 3200 },
+          { name: "tool.search", cls: "tool", at: 3200, ms: 410 },
+          { name: "llm.round2", cls: "ai", at: 3610, ms: 3040 },
+          { name: "tool.pipeline", cls: "tool", at: 6650, ms: 230 },
         ],
         steps: [
-          { type: "llm", round: 1, ms: 320, finish_reason: "tool_calls", tool_calls: ["search"], usage: { total_tokens: 120, prompt_tokens: 80, completion_tokens: 40 } },
+          { type: "llm", round: 1, ms: 3200, finish_reason: "tool_calls", tool_calls: ["search"], usage: { total_tokens: 8200, prompt_tokens: 7800, completion_tokens: 400 } },
           { type: "tool", round: 1, name: "search", status: 200, ms: 410, bytes: 8192 },
-          { type: "llm", round: 2, ms: 280, finish_reason: "stop", usage: { total_tokens: 95, prompt_tokens: 70, completion_tokens: 25 } },
-          { type: "tool", round: 2, name: "pipeline", status: 200, ms: 240, bytes: 2048,
+          { type: "llm", round: 2, ms: 3040, finish_reason: "stop", usage: { total_tokens: 7612, prompt_tokens: 7581, completion_tokens: 31 } },
+          { type: "tool", round: 2, name: "pipeline", status: 200, ms: 230, bytes: 2048,
             args: { steps: [{ name: "summarize", verb: "summarize" }] },
-            pipeline_step_costs: [{ as: "summarize", ms: 240, status: 200 }] },
+            pipeline_step_costs: [{ as: "summarize", ms: 230, status: 200 }] },
         ],
         ai_requests: [{ model: "gpt-4o-mini", messages: 2 }],
         tool_calls: [{ name: "search" }, { name: "pipeline" }],
+        catalog: {
+          has_mini_schema: true,
+          has_scope_brief: true,
+          system_message: {
+            role: "system",
+            content: "## SCOPE BRIEF\nnodes_total: 120 edges_total: 350 entities_total: 8\n## MINI-SCHEMA\n### Business\n",
+          },
+        },
       },
     };
 
     document.getElementById("run-trace").addEventListener("click", async () => {
       await window.ZeusTrace?.ready;
-      window.appendTraceCard("Best destinations in France?", fixture);
+      window.appendTraceCard("Highly recommended salon in Tampa", fixture);
       window.openDebugPanel?.();
     });
 

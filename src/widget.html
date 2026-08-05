@@ -1,20 +1,22 @@
 <button
   type="button"
   id="debug-toggle"
-  class="btn btn-square shadow-lg debug-toggle-btn"
+  class="debug-toggle-btn"
   title="Toggle Zeus trace panel"
   aria-expanded="false"
+  aria-label="Toggle Zeus Tracer"
 >
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="40" height="40">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
     <rect width="64" height="64" rx="10" ry="10" fill="#1f2937" />
     <path d="M36 6 L14 36 H28 L24 58 L50 26 H34 Z" fill="#facc15" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round" />
   </svg>
 </button>
 
-<aside id="debug-panel" class="debug-panel is-hidden" aria-hidden="true">
+<aside id="debug-panel" class="debug-panel is-hidden" aria-hidden="true" role="dialog" aria-labelledby="debug-panel-title">
   <header class="debug-panel-header">
     <div class="debug-panel-title-row">
-      <h2 id="debug-panel-title" class="font-bold text-sm">Zeus Tracer</h2>
+      <h2 id="debug-panel-title" class="debug-panel-title">Zeus Tracer</h2>
+      <span class="debug-title-dot" aria-hidden="true">·</span>
       <a
         id="debug-detective-link"
         class="debug-detective-link is-disabled"
@@ -24,17 +26,30 @@
         aria-disabled="true"
         title="Open Hub Detective for this session"
         hidden
-      >Detective ↗</a>
+      >Detective</a>
     </div>
-    <div class="flex gap-2">
-      <button type="button" id="trace-copy-full" class="btn btn-xs btn-ghost">Copy all</button>
-      <button type="button" id="debug-close" class="btn btn-xs btn-ghost" aria-label="Close">×</button>
+    <div class="debug-panel-actions">
+      <button type="button" id="trace-copy-full" class="btn-copy-all" title="Copy all traces as JSON">
+        <svg class="btn-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy All</span>
+      </button>
+      <button type="button" id="debug-close" class="btn-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12"></path>
+        </svg>
+      </button>
     </div>
   </header>
-  <div id="trace-total-wrapper" style="display:none"></div>
+
+  <div id="trace-total-wrapper" class="trace-total-wrapper" style="display:none"></div>
+
   <div id="trace-list" class="trace-list">
-    <div id="trace-empty" class="opacity-50 text-sm p-4">No search run yet.</div>
+    <div id="trace-empty" class="trace-empty">No search run yet.</div>
   </div>
+
   <footer id="debug-panel-footer" class="debug-panel-footer" aria-label="Widget version">
     <span id="debug-panel-version" class="debug-panel-version">v—</span>
   </footer>

@@ -99,12 +99,14 @@ When the host calls `appendTraceCard(question, responseJson)`:
 | Validate | Returns early if `responseJson.trace` is missing |
 | Session | Updates `chat_id` and appends to the in-memory trace session |
 | Card header | Turn number, query, API version, target, round count, session/contract badges |
+| Card head KPI | Compact DaisyUI **stats** strip (`tc-kpi-mini`): MINI-SCHEMA, SCOPE BRIEF, LLM Rounds, Tool Calls, Avg / round, Edges — smaller than token stats |
 | Metrics bar | AI vs Zeus vs other time; DaisyUI token stats (`in`/`out`/`total` from step `usage`); bytes; running total across turns |
+| Layer A | Compact DaisyUI **stats** cards (same size as head KPI): Confidence / Policy / Intent / Output / OK; query_decomposition facets; decomposition Targets / Predicates; harvested from `layer_a`, `structured_response`, or return/pipeline steps (`summary` kept in JSON dump only) |
 | Waterfall | Span timeline from `trace.spans`; `tool.pipeline` steps expand into sub-spans |
 | Tool chart | Frequency bars from `trace.steps`, ordered by `/api/tool-order` when available |
 | Text dump | Collapsible "Hash Traces" step summary |
 | Hash Traces | Round-by-round `[rN] LLM` / `[rN] TOOL` lines from `trace.steps` (falls back to `tool_calls`) |
-| JSON dumps | Lazy-loaded jsnview trees for AI requests/responses, tool calls, and the raw turn bundle |
+| JSON dumps | Lazy-loaded jsnview trees for AI requests/responses, tool calls, Layer A (when present), and the raw turn bundle |
 | Retention | Keeps the latest 12 cards; older cards roll off the list |
 
 **4. User interaction**
@@ -144,6 +146,24 @@ npm run build
 
 This produces `dist/zeus_client_chat_trace.js` (minified, with source map).
 
+### Publish to CDN (DigitalOcean Spaces)
+
+Versioned public CDN for the built bundle (Space `koten-static-cdn`, region `nyc3`):
+
+```bash
+npm run build
+npm run publish:cdn   # scripts/upload_dist_cdn.sh
+```
+
+Uploads both a **semver path** (immutable cache) and a **`latest`** pointer (short cache):
+
+| URL | Cache |
+|-----|--------|
+| `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js` | 1y immutable |
+| `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/latest/zeus_client_chat_trace.js` | 60s |
+
+Credentials: `DO_SPACES_KEY` / `DO_SPACES_SECRET` (see `.secrets/spaces-static.env`, gitignored). Optional `DIGITALOCEAN_TOKEN` creates/ensures the CDN endpoint. Origin (non-CDN) URLs use the same host without `.cdn.`.
+
 **Optional — build-time defaults:** Copy `.env.example` to `.env` and set defaults that apply when no runtime config is provided:
 
 ```bash
@@ -166,7 +186,7 @@ Add configuration and the script tag to any HTML page:
   window.ZeusTraceConfig = {
     zeusApiUrl: "https://zeus.example.com",
     zeusAuthToken: "optional-bearer-token",
-    hubBaseUrl: "http://hub",
+    hubBaseUrl: "http://zeus-dev.local:9091",
     // Optional hard enable. Omit and use ?debug=true on the page instead.
     // enabled: true,
   };
@@ -182,16 +202,74 @@ Alternatively, pass config via data attributes on the script tag:
   async
   data-zeus-api-url="https://zeus.example.com"
   data-zeus-auth-token="optional-bearer-token"
-  data-hub-base-url="http://hub"
+  data-hub-base-url="http://zeus-dev.local:9091"
   data-enabled="true"
 ></script>
 ```
 
-Config resolution order: `window.ZeusTraceConfig` → script `data-*` attributes → build-time `.env` defaults.
+Config resolution order:
+
+| Field | Resolution |
+|-------|------------|
+| `zeusApiUrl`, `zeusAuthToken`, `toolOrder`, `enabled` | `window.ZeusTraceConfig` → script `data-*` → build-time `.env` defaults (where applicable) |
+| **`hubBaseUrl`** | `window.ZeusTraceConfig.hubBaseUrl` → script `data-hub-base-url` → `""` (**runtime only** — not in `.env`) |
 
 **Visibility:** without `enabled: true` / `data-enabled="true"`, open the host page with `?debug=true` (e.g. `https://app.example/?debug=true`) or the panel will not mount.
 
-`hubBaseUrl` is the Hub / Detective origin (often different from the public API, e.g. admin port `:9091`). When unset, the Detective link stays hidden.
+### Hub base URL (`hubBaseUrl`) — Detective link
+
+`hubBaseUrl` is the **Zeus Hub / Detective origin**. It is often **not** the same host as the public Zeus API (`zeusApiUrl`). Local Hub admin commonly listens on port **`:9091`**.
+
+When `hubBaseUrl` and a `session_id` are both set, the panel keeps the title **Zeus Tracer** and shows **Detective ↗**, which opens:
+
+```text
+{hubBaseUrl}/hub/debug/session/{session_id}
+```
+
+When `hubBaseUrl` is unset/empty, the Detective control stays hidden (no broken link).
+
+#### How to set or change it
+
+1. **Preferred — host page config (before the widget script loads):**
+
+   ```js
+   window.ZeusTraceConfig = {
+     ...(window.ZeusTraceConfig || {}),
+     hubBaseUrl: "http://127.0.0.1:9091", // or http://zeus-dev.local:9091
+   };
+   ```
+
+2. **Script attribute:**
+
+   ```html
+   <script
+     src="…/zeus_client_chat_trace.js"
+     async
+     data-hub-base-url="http://127.0.0.1:9091"
+   ></script>
+   ```
+
+   (`data-hub-base-url` → `dataset.hubBaseUrl`. Trailing slashes are stripped.)
+
+3. **Not supported in this package’s `.env`:** There is no `HUB_BASE_URL` / `ZEUS_HUB_*` build-time variable. Changing Hub for an embedded host means updating the host’s runtime config (or rebuild the host if it bakes the value in, e.g. Vite `VITE_HUB_BASE_URL` in demo apps).
+
+4. **After the widget is already loaded:** Config is resolved once at bootstrap. Reload the page after changing `ZeusTraceConfig` / `data-hub-base-url`. Confirm with:
+
+   ```js
+   (await window.ZeusTrace.ready).config.hubBaseUrl
+   // or
+   window.ZeusTrace.config.hubBaseUrl
+   ```
+
+#### Examples
+
+| Environment | Typical `hubBaseUrl` |
+|-------------|----------------------|
+| Local Hub admin | `http://127.0.0.1:9091` |
+| Lab / hosts file | `http://zeus-dev.local:9091` |
+| Demo placeholder | `http://hub` (see `examples/embed.html`) |
+
+Do **not** point `hubBaseUrl` at the public API port (often `:8080`) unless Hub is actually served there — Detective routes live on the Hub origin.
 
 ### 3. Feed traces after each search
 
@@ -218,7 +296,7 @@ api.openDebugPanel();
 
 A floating toggle button (bottom-right) lets users open and close the panel at any time.
 
-When `session_id` (or `trace.session.id`) and `hubBaseUrl` are both set, the panel title stays **Zeus Tracer** and a **Detective ↗** link opens `{hubBaseUrl}/hub/debug/session/{session_id}` in a new tab.
+Detective link behavior (needs both `hubBaseUrl` and session id) is described in [Hub base URL](#hub-base-url-hubbaseurl--detective-link) above.
 
 Session-id resolution: top-level `session_id` → `trace.session_id` → `trace.session.id` → `trace.session.session_id` → `session.id`.
 
@@ -279,6 +357,7 @@ See `examples/embed.html` for a complete fixture.
 | `npm test` | Run unit tests once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
+| `npm run publish:cdn` | Upload `dist/` to DO Spaces + ensure CDN (`scripts/upload_dist_cdn.sh`) |
 
 ### Project layout
 
@@ -292,6 +371,8 @@ src/
   widget.css        Widget styles
 dist/
   zeus_client_chat_trace.js   Built bundle (commit or deploy this)
+scripts/
+  upload_dist_cdn.sh          Publish dist/ to Spaces CDN (versioned + latest)
 examples/
   embed.html        Local integration demo
 ```
@@ -308,7 +389,7 @@ examples/
 | No tool-call rounds / dumps never appear | Stale bundle with broken jsnview URL hanging load | Redeploy rebuilt `dist/zeus_client_chat_trace.js` |
 | Widget styles missing | DaisyUI CDN blocked | Allow `cdn.jsdelivr.net` |
 | Early `appendTraceCard` calls lost | Custom stub overwrote the queue | Use the built bundle as-is; it installs the queue before mount |
-| Detective link hidden or wrong | Missing `hubBaseUrl` / `session_id`, or stale bundle still on `/hub/debug/req/...` | Set `ZeusTraceConfig.hubBaseUrl`; ensure payload includes `session_id`; rebuild/sync widget |
+| Detective link hidden or wrong | Missing `hubBaseUrl` / `session_id`, wrong Hub origin, or stale bundle still on `/hub/debug/req/...` | Set `hubBaseUrl` (see [Hub base URL](#hub-base-url-hubbaseurl--detective-link)); ensure payload includes `session_id`; reload after config change; rebuild/sync widget |
 
 ## Docs
 

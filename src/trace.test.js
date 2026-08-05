@@ -106,6 +106,271 @@ describe("initZeusTrace", () => {
     expect(root.querySelector(".trace-waterfall")).not.toBeNull();
   });
 
+  it("renders head KPI mini grid under trace-card-head from catalog + turn fields", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+    const brief =
+      "## SCOPE BRIEF\n" +
+      "scope: yelp-data/_default\n" +
+      "nodes_total: 100  edges_total: 24500  entities_total: 12\n" +
+      "\n## MINI-SCHEMA\n### Business\n";
+
+    api.appendTraceCard(
+      "head stats",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 2500,
+          spans: [
+            { name: "llm.round1", cls: "ai", at: 0, ms: 1000 },
+            { name: "tool.find", cls: "tool", at: 1000, ms: 500 },
+            { name: "llm.round2", cls: "ai", at: 1500, ms: 1000 },
+          ],
+          steps: [
+            { type: "llm", round: 1, ms: 1000, finish_reason: "tool_calls", tool_calls: ["find"] },
+            { type: "tool", round: 1, name: "find", status: 200, ms: 500, bytes: 100 },
+            { type: "llm", round: 2, ms: 1000, finish_reason: "stop", tool_calls: [] },
+          ],
+          ai_requests: [{ round: 1 }, { round: 2 }],
+          tool_calls: [
+            { round: 1, name: "find", status: 200 },
+            { round: 1, name: "pipeline", status: 200 },
+          ],
+          catalog: {
+            has_scope_brief: true,
+            has_mini_schema: true,
+            system_message: { role: "system", content: brief },
+          },
+        },
+      })
+    );
+
+    const card = root.querySelector(".trace-card");
+    const head = card.querySelector(".trace-card-head");
+    const grid = card.querySelector(".tc-kpi-mini");
+    expect(grid).not.toBeNull();
+    expect(grid.classList.contains("stats")).toBe(true);
+    // KPI strip lives in card body under the head (dashboard layout)
+    expect(head.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(card.querySelector(".trace-card-body")).toContain(grid);
+
+    const labels = [...grid.querySelectorAll(".stat-title")].map((el) => el.textContent.trim());
+    const values = [...grid.querySelectorAll(".stat-value")].map((el) => el.textContent);
+    expect(labels).toEqual([
+      "MINI-SCHEMA",
+      "SCOPE BRIEF",
+      "LLM Rounds",
+      "Tool Calls",
+      "Avg / round",
+      "Edges",
+    ]);
+    expect(values[0]).toBe("Yes");
+    expect(values[1]).toBe("Yes");
+    expect(values[2]).toBe("2");
+    expect(values[3]).toBe("2");
+    // 2500ms / 2 rounds = 1.25s
+    expect(values[4]).toBe("1.25s");
+    expect(values[5]).toBe("24,500");
+  });
+
+  it("head KPI shows No / — when catalog and edges are absent", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "no catalog",
+      makeTraceFixture({
+        trace: {
+          rounds: 1,
+          total_ms: 400,
+          tool_calls: [{ name: "search" }],
+          catalog: undefined,
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll(".tc-kpi-mini .stat-value")].map((el) => el.textContent);
+    expect(values[0]).toBe("No"); // MINI-SCHEMA
+    expect(values[1]).toBe("No"); // SCOPE BRIEF
+    expect(values[2]).toBe("1"); // LLM Rounds
+    expect(values[3]).toBe("1"); // Tool Calls
+    expect(values[4]).toBe("0.40s"); // 400ms / 1
+    expect(values[5]).toBe("—"); // Edges
+  });
+
+  it("head KPI detects inject markers from system text when catalog flags false", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "text markers",
+      makeTraceFixture({
+        trace: {
+          rounds: 0,
+          total_ms: 0,
+          steps: [
+            { type: "llm", round: 1, ms: 100 },
+            { type: "tool", round: 1, name: "find", ms: 50 },
+          ],
+          tool_calls: [],
+          catalog: {
+            has_scope_brief: false,
+            has_mini_schema: false,
+            system_message: {
+              role: "system",
+              content: "intro\n## SCOPE BRIEF\nnodes_total: 1 edges_total: 3\n## MINI-SCHEMA\n",
+            },
+          },
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll(".tc-kpi-mini .stat-value")].map((el) => el.textContent);
+    expect(values[0]).toBe("Yes");
+    expect(values[1]).toBe("Yes");
+    // rounds=0 → fallback count llm steps
+    expect(values[2]).toBe("1");
+    // tool_calls empty → count tool steps
+    expect(values[3]).toBe("1");
+    expect(values[5]).toBe("3");
+  });
+
+  const sampleLayerA = {
+    summary: "Department stores in Tucson from the Yelp business data, ranked by review count.",
+    query_decomposition: {
+      intent: "List",
+      entity: "Business",
+      geo: "Tucson",
+      theme: "department stores",
+    },
+    decomposition: {
+      targets: [
+        {
+          entity_type: "Business",
+          focus: ["name", "address", "city", "stars", "review_count", "categories", "is_open"],
+        },
+      ],
+      predicates: {
+        city: "Tucson",
+        categories: "department store",
+      },
+      output: "rows",
+    },
+    confidence: "med",
+    policy_action: "answer",
+    business_rules_triggers: {
+      stay_in_company_context: true,
+      no_invent_data: true,
+    },
+    app_output: null,
+    jail_break_attempt: 0,
+    errors: [],
+    warnings: [],
+    ok: true,
+  };
+
+  it("renders Layer A panel from response.layer_a (confidence, policy, QD, decomp)", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "department stores Tucson",
+      makeTraceFixture({ layer_a: sampleLayerA })
+    );
+
+    const panel = root.querySelector(".layer-a-panel");
+    expect(panel).not.toBeNull();
+    expect(panel.textContent).toContain("Layer A");
+    // Summary is harvested for dumps/detection but not shown in the panel UI
+    expect(panel.textContent).not.toContain(sampleLayerA.summary);
+    expect(panel.querySelector(".la-stats-summary")).toBeNull();
+    expect(panel.textContent).toContain("med");
+    expect(panel.textContent).toContain("answer");
+    expect(panel.textContent).toContain("query_decomposition");
+    expect(panel.textContent).toContain("List");
+    expect(panel.textContent).toContain("Business");
+    expect(panel.textContent).toContain("Tucson");
+    expect(panel.textContent).toContain("department stores");
+    expect(panel.textContent).toContain("decomposition");
+    expect(panel.textContent).toContain("Predicates");
+    expect(panel.textContent).toContain("city");
+    expect(panel.textContent).toContain("department store");
+    expect(panel.textContent).toContain("rows");
+    expect(panel.textContent).toContain("Targets");
+
+    // DaisyUI stats card structure
+    const primary = panel.querySelector(".la-stats-primary");
+    expect(primary).not.toBeNull();
+    expect(primary.classList.contains("stats")).toBe(true);
+    const titles = [...primary.querySelectorAll(".stat-title")].map((el) => el.textContent);
+    expect(titles).toEqual(expect.arrayContaining(["Confidence", "Policy", "Intent", "Output"]));
+    const values = [...primary.querySelectorAll(".stat-value")].map((el) => el.textContent);
+    expect(values).toEqual(expect.arrayContaining(["med", "answer", "List", "rows"]));
+
+    // Placement: after KPI mini, before metrics
+    const card = root.querySelector(".trace-card");
+    const kpi = card.querySelector(".tc-kpi-mini");
+    expect(kpi.nextElementSibling).toBe(panel);
+  });
+
+  it("harvests Layer A from return_result step when envelope bag missing", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "from steps",
+      makeTraceFixture({
+        trace: {
+          steps: [
+            { type: "llm", round: 1, ms: 100, finish_reason: "tool_calls", tool_calls: ["find"] },
+            { type: "tool", round: 1, name: "find", status: 200, ms: 50, bytes: 10 },
+            {
+              type: "return_result",
+              round: 1,
+              args: {
+                summary: "Two salons in Tampa.",
+                confidence: "high",
+                policy_action: "answer",
+                query_decomposition: { intent: "List", entity: "Business", geo: "Tampa" },
+                decomposition: {
+                  targets: [{ entity_type: "Business", focus: ["name"] }],
+                  predicates: { city: "Tampa" },
+                  output: "rows",
+                },
+              },
+            },
+          ],
+        },
+      })
+    );
+
+    const panel = root.querySelector(".layer-a-panel");
+    expect(panel).not.toBeNull();
+    expect(panel.textContent).not.toContain("Two salons in Tampa.");
+    expect(panel.textContent).toContain("high");
+    expect(panel.textContent).toContain("Tampa");
+    expect(panel.textContent).toContain("return_result");
+  });
+
+  it("harvests Layer A from structured_response.layer_a", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "structured",
+      makeTraceFixture({
+        structured_response: { layer_a: sampleLayerA, answer: "x" },
+      })
+    );
+
+    const panel = root.querySelector(".layer-a-panel");
+    expect(panel).not.toBeNull();
+    expect(panel.textContent).not.toContain("Department stores in Tucson");
+    expect(panel.textContent).toContain("structured_response.layer_a");
+    expect(panel.textContent).toContain("med");
+    expect(panel.textContent).toContain("List");
+  });
+
+  it("omits Layer A panel when terminate bag is absent", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+    api.appendTraceCard("plain", makeTraceFixture());
+    expect(root.querySelector(".layer-a-panel")).toBeNull();
+  });
+
   it("renders DaisyUI token stats for in / out / total on the metrics row", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
 
@@ -161,7 +426,7 @@ describe("initZeusTrace", () => {
 
     const totalEl = root.querySelector("#trace-total");
     expect(totalEl.style.display).toBe("flex");
-    expect(totalEl.textContent).toMatch(/TOTAL/);
+    expect(totalEl.textContent).toMatch(/Total/i);
   });
 
   it("formats token stats with thousand separators", () => {
