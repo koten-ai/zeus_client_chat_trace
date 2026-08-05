@@ -203,6 +203,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-05 | agent | Release v0.1.11: tighter panel header + token tile padding; CDN publish |
 | 2026-08-05 | agent | Release v0.1.10: collapsible scrollable trace cards; CDN publish |
 | 2026-08-05 | agent | `.trace-card-body` scrollable: max-height min(45vh, 480px) + overflow-y auto (head stays pinned) |
 | 2026-08-05 | agent | `.trace-card` collapsible: head button + chevron toggles body (`.is-collapsed`) |
