@@ -10,7 +10,7 @@ When a host application calls the Zeus search API, the response includes a `trac
 
 - **One-script embed** — Load `dist/zeus_client_chat_trace.js` asynchronously; the widget mounts itself in an isolated Shadow DOM.
 - **Debug kill switch** — UI is **off by default**. Show it with `?debug=true` on the host page URL, or set `ZeusTraceConfig.enabled = true` / `data-enabled="true"`.
-- **Trace cards** — Each search turn becomes a card showing the user query, API version, target, round count, and session/contract badges.
+- **Trace cards** — Each search turn becomes a collapsible card (head click) showing the user query, API version, target, round count, and session/contract badges; long bodies scroll under a pinned head.
 - **Performance metrics** — Stacked bar showing AI vs Zeus vs other time, DaisyUI token stats (`in` / `out` / `total` from LLM `usage`), and byte totals. A running total aggregates across turns.
 - **Waterfall timeline** — Visual span chart for LLM and tool execution, with pipeline steps expanded inline.
 - **Tool-call frequency chart** — Bar chart ordered by the Zeus `/api/tool-order` endpoint (falls back gracefully when the API is unreachable).
@@ -98,7 +98,8 @@ When the host calls `appendTraceCard(question, responseJson)`:
 |------|----------------|
 | Validate | Returns early if `responseJson.trace` is missing |
 | Session | Updates `chat_id` and appends to the in-memory trace session |
-| Card header | Turn number, query, API version, target, round count, session/contract badges |
+| Card header | Turn number, query, API version, target, round count — clickable button collapses/expands body (chevron + `aria-expanded`) |
+| Card body | Scrollable (`max-height: min(45vh, 480px)`); session/contract badges, KPI strip, metrics, Layer A, waterfall, charts, dumps |
 | Card head KPI | Compact DaisyUI **stats** strip (`tc-kpi-mini`): MINI-SCHEMA, SCOPE BRIEF, LLM Rounds, Tool Calls, Avg / round, Edges — smaller than token stats |
 | Metrics bar | AI vs Zeus vs other time; DaisyUI token stats (`in`/`out`/`total` from step `usage`); bytes; running total across turns |
 | Layer A | Compact DaisyUI **stats** cards (same size as head KPI): Confidence / Policy / Intent / Output / OK; query_decomposition facets; decomposition Targets / Predicates; harvested from `layer_a`, `structured_response`, or return/pipeline steps (`summary` kept in JSON dump only) |

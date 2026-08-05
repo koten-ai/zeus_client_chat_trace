@@ -1018,8 +1018,12 @@ export function initZeusTrace(root, config = {}) {
 
     const card = document.createElement("div");
     card.className = "trace-card";
-    const head = document.createElement("div");
+    const bodyId = `trace-card-body-${traceTurn}`;
+    const head = document.createElement("button");
+    head.type = "button";
     head.className = "trace-card-head";
+    head.setAttribute("aria-expanded", "true");
+    head.setAttribute("aria-controls", bodyId);
     const apiLabel = apiValue(j.api_version || t.api_version);
     head.innerHTML =
       `<div class="trace-card-head-main">`
@@ -1028,11 +1032,13 @@ export function initZeusTrace(root, config = {}) {
       + `<span class="tc-q" title="${escapeHtml(question)}">${escapeHtml(question)}</span>`
       + `</div>`
       + `<div class="tc-meta">${escapeHtml(apiLabel.toUpperCase())} · ${escapeHtml(j.target || "")} · ${t.rounds || 0} rounds</div>`
-      + `</div>`;
+      + `</div>`
+      + `<span class="tc-chevron" aria-hidden="true"></span>`;
     card.appendChild(head);
 
     const body = document.createElement("div");
     body.className = "trace-card-body";
+    body.id = bodyId;
 
     const badgesHtml = contractSessionBadges(j, t);
     if (badgesHtml) {
@@ -1063,6 +1069,11 @@ export function initZeusTrace(root, config = {}) {
 
     appendTraceDump(body, question, j, t, layerA);
     card.appendChild(body);
+
+    head.addEventListener("click", () => {
+      const collapsed = card.classList.toggle("is-collapsed");
+      head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    });
     list.prepend(card);
     traceTotals.push(traceMetrics(t));
     while (list.children.length > TRACE_MAX_CARDS) {

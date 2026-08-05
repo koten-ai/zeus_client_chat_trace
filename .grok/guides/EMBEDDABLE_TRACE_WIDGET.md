@@ -3,7 +3,7 @@
 **Date**: 2026-08-05  
 **Feature**: Single-script Zeus trace debugger embeddable in any host page  
 **Status**: Active  
-**Related Plan**: `.grok/plans/EMBEDDABLE_TRACE_WIDGET.md`, `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/TOOL_CALL_ROUNDS_DUMP.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/CARD_HEAD_STAT_GRID.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`
+**Related Plan**: `.grok/plans/EMBEDDABLE_TRACE_WIDGET.md`, `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/TOOL_CALL_ROUNDS_DUMP.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/CARD_HEAD_STAT_GRID.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`, `.grok/plans/TRACE_CARD_COLLAPSE.md`
 
 ## 1. Overview
 - **Purpose**: Inject a floating Zeus trace panel into third-party pages via one async script tag.
@@ -18,7 +18,7 @@
 4. If **enabled**: mounts Shadow DOM on `#zeus-trace-host`, injects DaisyUI + CSS/HTML, `initZeusTrace`.
 5. tool-order is applied from injected `toolOrder` when present; otherwise a **background** fetch of `/api/tool-order` runs (default 3s abort) and never blocks mount.
 6. Host calls `appendTraceCard(question, responseJson)` after each search. Globals are live as soon as bootstrap finishes (`ZeusTrace.ready`), independent of tool-order.
-7. Each card renders a **session head** (`#N` + query + meta), optional **contract/session badges** (split pills), **KPI tile grid** (under head body), optional **Layer A** (primary key|value pills + code blocks for QD/decomp), per-card timing bar, waterfall rows, tool-frequency chart, **Hash Traces**, and collapsible dumps.
+7. Each card renders a **collapsible session head** (button: `#N` + query + meta + chevron; click toggles body), optional **contract/session badges** (split pills), **KPI tile grid** (under head body), optional **Layer A** (primary key|value pills + code blocks for QD/decomp), per-card timing bar, waterfall rows, tool-frequency chart, **Hash Traces**, and collapsible dumps. Cards start expanded; collapsed state is `.trace-card.is-collapsed` (body `display: none`).
 8. Panel chrome: **Zeus Tracer · Detective** header, blue **Copy All**, close; top **token tiles** (In/Out/Total) + **Total progress bar** (AI orange / Zeus teal / Other gray); footer version pill.
 
 **Key components**:
@@ -128,6 +128,13 @@ window.openDebugPanel?.();
 - Missing fields show `?`; if only in/out are present, total is derived as in+out
 - Rendered as `#tokens-total` grid with `.stat-title` / `.stat-value` (blue / purple / green tiles); below it a full-width AI/Zeus/Other progress bar with % labels
 
+**Trace card collapse**:
+- Head is a `<button class="trace-card-head">` with `aria-expanded` / `aria-controls` pointing at `trace-card-body-{N}`
+- Click toggles `.is-collapsed` on `.trace-card` and flips `aria-expanded`
+- Chevron (`.tc-chevron`) rotates when collapsed; body is hidden via CSS
+- Not persisted across reloads; new cards start expanded
+- Expanded body is scrollable (`max-height: min(45vh, 480px)`; overflow-y auto) so the card head stays visible while long turn content scrolls
+
 **Head KPI strip** (inside `div.trace-card-body`, class `stats shadow tc-kpi-mini` — gray tiles + blue value pills):
 
 | Label | Value | Source |
@@ -178,6 +185,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - [ ] Expand **Hash Traces** for `[r1] LLM` / `[r1] TOOL …` lines
 - [ ] Expand **Tool calls · N** (open by default when N > 0); each record has `round`
 - [ ] TOTAL area shows three colored token tiles with titles `Token In` / `Token Out` / `Total Tokens` when step `usage` is present, plus AI/Zeus/Other bar
+- [ ] Card head click collapses/expands body (`aria-expanded`, `.is-collapsed`); chevron visible
 - [ ] Under card head body: KPI tile grid shows MINI-SCHEMA / SCOPE BRIEF / LLM Rounds / Tool Calls / Avg / round / Edges
 - [ ] When terminate bag present: **Layer A** primary pills + code blocks for query_decomposition / decomposition; no Summary row
 - [ ] Panel title is `Zeus Tracer`
@@ -189,12 +197,15 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - **Tickets**:
   - [ZC-31](https://kotenai.atlassian.net/browse/ZC-31) — embeddable widget
   - [ZC-43](https://kotenai.atlassian.net/browse/ZC-43) — original request-id Detective link (superseded path by session link)
-- **Plans**: `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`
+- **Plans**: `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`, `.grok/plans/TRACE_CARD_COLLAPSE.md`
 
 ## 7. Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-05 | agent | Release v0.1.10: collapsible scrollable trace cards; CDN publish |
+| 2026-08-05 | agent | `.trace-card-body` scrollable: max-height min(45vh, 480px) + overflow-y auto (head stays pinned) |
+| 2026-08-05 | agent | `.trace-card` collapsible: head button + chevron toggles body (`.is-collapsed`) |
 | 2026-08-05 | agent | Release v0.1.9: dashboard UI redesign (code.html), 3-col KPI grid, list y-scroll; CDN publish |
 | 2026-08-05 | agent | Dashboard UI redesign from `code.html` guide: token tiles, total progress bar, session card chrome, split badges, Layer A pills + code blocks; 3-col KPI; list scrollbar |
 | 2026-08-05 | agent | Release v0.1.8: Layer A panel drops Summary row (still in JSON dump); CDN publish |

@@ -106,6 +106,28 @@ describe("initZeusTrace", () => {
     expect(root.querySelector(".trace-waterfall")).not.toBeNull();
   });
 
+  it("trace-card head toggles body collapse", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+    api.appendTraceCard("collapsible turn", makeTraceFixture());
+
+    const card = root.querySelector(".trace-card");
+    const head = card.querySelector(".trace-card-head");
+    const body = card.querySelector(".trace-card-body");
+    expect(head.tagName).toBe("BUTTON");
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+    expect(head.getAttribute("aria-controls")).toBe(body.id);
+    expect(card.classList.contains("is-collapsed")).toBe(false);
+    expect(body.querySelector(".trace-waterfall")).not.toBeNull();
+
+    head.click();
+    expect(card.classList.contains("is-collapsed")).toBe(true);
+    expect(head.getAttribute("aria-expanded")).toBe("false");
+
+    head.click();
+    expect(card.classList.contains("is-collapsed")).toBe(false);
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("renders head KPI mini grid under trace-card-head from catalog + turn fields", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
     const brief =
