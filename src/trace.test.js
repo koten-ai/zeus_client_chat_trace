@@ -451,6 +451,76 @@ describe("initZeusTrace", () => {
     expect(totalEl.textContent).toMatch(/Total/i);
   });
 
+  it("prefers trace.tokens rollup over step usage", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "authoritative tokens",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 500,
+          tokens: {
+            prompt: 140,
+            completion: 32,
+            total: 172,
+            cached: 0,
+            extra: 0,
+            ok: true,
+          },
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              usage: { total_tokens: 50, prompt_tokens: 30, completion_tokens: 20 },
+            },
+            {
+              type: "force_final",
+              round: 1,
+              ms: 100,
+              usage: { total_tokens: 80, prompt_tokens: 50, completion_tokens: 30 },
+            },
+          ],
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll("#tokens-total .stat-value")].map((el) => el.textContent);
+    expect(values).toEqual(["140", "32", "172"]);
+  });
+
+  it("sums force_final step usage when trace.tokens missing", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
+
+    api.appendTraceCard(
+      "force_final usage",
+      makeTraceFixture({
+        trace: {
+          rounds: 2,
+          total_ms: 400,
+          steps: [
+            {
+              type: "llm",
+              round: 1,
+              ms: 200,
+              usage: { total_tokens: 120, prompt_tokens: 100, completion_tokens: 20 },
+            },
+            {
+              type: "force_final",
+              round: 1,
+              ms: 100,
+              usage: { total_tokens: 52, prompt_tokens: 40, completion_tokens: 12 },
+            },
+          ],
+        },
+      })
+    );
+
+    const values = [...root.querySelectorAll("#tokens-total .stat-value")].map((el) => el.textContent);
+    expect(values).toEqual(["140", "32", "172"]);
+  });
+
   it("formats token stats with thousand separators", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
 

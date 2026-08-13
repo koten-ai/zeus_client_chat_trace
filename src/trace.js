@@ -189,30 +189,69 @@ export function initZeusTrace(root, config = {}) {
   function traceMetrics(t) {
     let aiMs = 0, zeusMs = 0, tokens = 0, tokensIn = 0, tokensOut = 0, bytes = 0;
     let hasTokens = false, hasIn = false, hasOut = false;
-    (t.steps || []).forEach((s) => {
-      if (s.type === "llm" || s.type === "llm_error") aiMs += s.ms || 0;
-      if (s.type === "tool") {
-        zeusMs += s.ms || 0;
-        bytes += s.bytes || 0;
+
+    // Prefer authoritative Hub-shaped rollup from the library when present.
+    const roll = t && t.tokens;
+    if (roll && roll.ok && (roll.prompt || roll.completion || roll.total)) {
+      tokensIn = Number(roll.prompt) || 0;
+      tokensOut = Number(roll.completion) || 0;
+      tokens = Number(roll.total) || (tokensIn + tokensOut);
+      hasIn = true;
+      hasOut = true;
+      hasTokens = true;
+      (t.steps || []).forEach((s) => {
+        if (s.type === "llm" || s.type === "llm_error" || s.type === "force_final") aiMs += s.ms || 0;
+        if (s.type === "tool") {
+          zeusMs += s.ms || 0;
+          bytes += s.bytes || 0;
+        }
+      });
+    } else {
+      (t.steps || []).forEach((s) => {
+        if (s.type === "llm" || s.type === "llm_error" || s.type === "force_final") aiMs += s.ms || 0;
+        if (s.type === "tool") {
+          zeusMs += s.ms || 0;
+          bytes += s.bytes || 0;
+        }
+        const u = s.usage;
+        if (!u) return;
+        if (u.total_tokens != null) {
+          tokens += Number(u.total_tokens) || 0;
+          hasTokens = true;
+        }
+        if (u.prompt_tokens != null) {
+          tokensIn += Number(u.prompt_tokens) || 0;
+          hasIn = true;
+        }
+        if (u.completion_tokens != null) {
+          tokensOut += Number(u.completion_tokens) || 0;
+          hasOut = true;
+        }
+      });
+      // Legacy: force_final / hops with usage only under ai_responses[].body.usage
+      if (!hasIn && !hasOut && Array.isArray(t.ai_responses)) {
+        (t.ai_responses || []).forEach((entry) => {
+          const body = entry && entry.body;
+          const u = (body && body.usage) || (entry && entry.usage);
+          if (!u) return;
+          if (u.total_tokens != null) {
+            tokens += Number(u.total_tokens) || 0;
+            hasTokens = true;
+          }
+          if (u.prompt_tokens != null) {
+            tokensIn += Number(u.prompt_tokens) || 0;
+            hasIn = true;
+          }
+          if (u.completion_tokens != null) {
+            tokensOut += Number(u.completion_tokens) || 0;
+            hasOut = true;
+          }
+        });
       }
-      const u = s.usage;
-      if (!u) return;
-      if (u.total_tokens != null) {
-        tokens += Number(u.total_tokens) || 0;
+      if (!hasTokens && (hasIn || hasOut)) {
+        tokens = tokensIn + tokensOut;
         hasTokens = true;
       }
-      if (u.prompt_tokens != null) {
-        tokensIn += Number(u.prompt_tokens) || 0;
-        hasIn = true;
-      }
-      if (u.completion_tokens != null) {
-        tokensOut += Number(u.completion_tokens) || 0;
-        hasOut = true;
-      }
-    });
-    if (!hasTokens && (hasIn || hasOut)) {
-      tokens = tokensIn + tokensOut;
-      hasTokens = true;
     }
     const total = t.total_ms || aiMs + zeusMs;
     const other = Math.max(0, total - aiMs - zeusMs);
