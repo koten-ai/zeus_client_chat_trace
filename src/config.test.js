@@ -108,6 +108,8 @@ describe("resolveConfig", () => {
       zeusAuthToken: "secret",
       toolOrder: null,
       enabled: false,
+      mount: "overlay",
+      mountSelector: "",
     });
   });
 
@@ -134,6 +136,8 @@ describe("resolveConfig", () => {
       zeusAuthToken: "dataset-token",
       toolOrder: null,
       enabled: false,
+      mount: "overlay",
+      mountSelector: "",
     });
   });
 
@@ -163,6 +167,8 @@ describe("resolveConfig", () => {
       zeusAuthToken: "",
       toolOrder: null,
       enabled: false,
+      mount: "overlay",
+      mountSelector: "",
     });
   });
 
@@ -234,8 +240,36 @@ describe("publicConfig", () => {
       hubBaseUrl: "http://hub",
       toolOrder: { v1: [], v2: ["find"] },
       enabled: true,
+      mount: "overlay",
+      mountSelector: "",
       version: getWidgetVersion(),
     });
+  });
+
+  it("passes through docked mount", () => {
+    expect(
+      publicConfig({
+        zeusApiUrl: "",
+        hubBaseUrl: "",
+        toolOrder: null,
+        enabled: true,
+        mount: "docked",
+        mountSelector: "#slot",
+      }).mount
+    ).toBe("docked");
+  });
+});
+
+describe("resolveConfig mount", () => {
+  it("defaults to overlay", () => {
+    expect(resolveConfig({ search: "" }).mount).toBe("overlay");
+  });
+
+  it("reads docked from window config", () => {
+    window.ZeusTraceConfig = { mount: "docked", mountSelector: "#zeus-trace-slot" };
+    const cfg = resolveConfig({ search: "" });
+    expect(cfg.mount).toBe("docked");
+    expect(cfg.mountSelector).toBe("#zeus-trace-slot");
   });
 });
 

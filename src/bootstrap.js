@@ -5,8 +5,6 @@ import { initZeusTrace } from "./trace.js";
 import widgetHtml from "./widget.html";
 import widgetCss from "./widget.css";
 
-const DAISYUI_CDN = "https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css";
-
 const earlyQueue = [];
 let bootstrapped = false;
 
@@ -14,6 +12,12 @@ function noopApi() {
   return {
     appendTraceCard() {},
     openDebugPanel() {},
+    setEntries() {},
+    clear() {},
+    exportBundle() {
+      return { traces: [] };
+    },
+    setJobMode() {},
   };
 }
 
@@ -31,11 +35,32 @@ function drainQueue(api) {
   earlyQueue.length = 0;
 }
 
+function attachHost(config) {
+  const docked = config.mount === "docked";
+  const selector = config.mountSelector;
+  let host;
+  if (docked && selector) {
+    host = document.querySelector(selector);
+  }
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "zeus-trace-host";
+    host.style.cssText = docked
+      ? "all:initial;display:block;position:relative;width:100%;height:100%;min-height:320px;z-index:1;"
+      : "all:initial;display:block;position:fixed;inset:0;z-index:99999;pointer-events:none;";
+    document.body.appendChild(host);
+  } else {
+    host.style.display = host.style.display || "block";
+    host.style.position = host.style.position || "relative";
+    host.style.minHeight = host.style.minHeight || "320px";
+  }
+  if (!host.id) host.id = "zeus-trace-host";
+  return { host, docked };
+}
+
 function mountWidget() {
   const config = resolveConfig();
 
-  // Kill switch: no DOM, no DaisyUI, no side-fetches when disabled.
-  // Host APIs remain no-ops so callers never throw.
   if (!config.enabled) {
     const api = noopApi();
     window.appendTraceCard = api.appendTraceCard;
@@ -45,33 +70,30 @@ function mountWidget() {
     return { api, config };
   }
 
-  const host = document.createElement("div");
-  host.id = "zeus-trace-host";
-  host.style.cssText = "all:initial;position:fixed;inset:0;z-index:99999;pointer-events:none;";
-  document.body.appendChild(host);
-
+  const { host, docked } = attachHost(config);
   const shadow = host.attachShadow({ mode: "open" });
-
-  const daisyLink = document.createElement("link");
-  daisyLink.rel = "stylesheet";
-  daisyLink.href = DAISYUI_CDN;
 
   const style = document.createElement("style");
   style.textContent = widgetCss;
 
   const themeRoot = document.createElement("div");
   themeRoot.className = "zeus-trace-root";
-  themeRoot.setAttribute("data-theme", "light");
+  themeRoot.setAttribute("data-theme", "dark");
+  themeRoot.setAttribute("data-mount", docked ? "docked" : "overlay");
   themeRoot.style.pointerEvents = "auto";
   themeRoot.innerHTML = widgetHtml;
 
-  shadow.append(daisyLink, style, themeRoot);
+  shadow.append(style, themeRoot);
 
-  // Install APIs immediately. tool-order is best-effort chart metadata and must
-  // never gate the floating widget or early-queue drain (fetch can hang/CORS).
   const api = initZeusTrace(themeRoot, config);
   window.appendTraceCard = api.appendTraceCard;
   window.openDebugPanel = api.openDebugPanel;
+  if (window.ZeusTrace) {
+    window.ZeusTrace.setEntries = api.setEntries;
+    window.ZeusTrace.clear = api.clear;
+    window.ZeusTrace.exportBundle = api.exportBundle;
+    window.ZeusTrace.setJobMode = api.setJobMode;
+  }
   drainQueue(api);
 
   bootstrapped = true;
@@ -81,19 +103,9 @@ function mountWidget() {
 
 installEarlyQueue();
 
+let settleReady;
 const ready = new Promise((resolve) => {
-  const run = () => {
-    try {
-      const { api, config } = mountWidget();
-      resolve({ api, config });
-    } catch (err) {
-      console.error("[ZeusTrace] Failed to mount widget:", err);
-      resolve({ api: null, config: null, error: err });
-    }
-  };
-
-  if (document.body) run();
-  else document.addEventListener("DOMContentLoaded", run);
+  settleReady = resolve;
 });
 
 window.ZeusTrace = {
@@ -105,3 +117,16 @@ window.ZeusTrace = {
     return publicConfig(resolveConfig()).version;
   },
 };
+
+const run = () => {
+  try {
+    const { api, config } = mountWidget();
+    settleReady({ api, config });
+  } catch (err) {
+    console.error("[ZeusTrace] Failed to mount widget:", err);
+    settleReady({ api: null, config: null, error: err });
+  }
+};
+
+if (document.body) run();
+else document.addEventListener("DOMContentLoaded", run);

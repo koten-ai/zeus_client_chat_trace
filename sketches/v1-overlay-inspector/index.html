@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zeus Tracer v1 — overlay inspector mockup</title>
+  <style>
+    :root {
+      --tt-bg: #0b0f14; --tt-elev: #121820; --tt-elev-2: #18212c; --tt-hover: #1c2734;
+      --tt-border: #243041; --tt-fg: #e8eef6; --tt-muted: #8b9bb0; --tt-dim: #5d6d82;
+      --tt-accent: #5b8cff; --tt-ai: #f59e0b; --tt-zeus: #22c55e; --tt-other: #818cf8;
+      --tt-ok: #22c55e; --tt-warn: #f59e0b; --tt-err: #f43f5e;
+      --tt-mono: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #e8eef4; color: #1f2937;
+    }
+    .host { max-width: 720px; margin: 0 auto; padding: 28px 20px 120px; }
+    .host h1 { font-size: 22px; margin: 0 0 8px; }
+    .host p { color: #4b5563; }
+    .sketch-bar {
+      display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0;
+    }
+    .sketch-bar button {
+      font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 999px;
+      padding: 4px 10px; cursor: pointer;
+    }
+    .sketch-bar button.on { background: #1f2937; color: #fff; border-color: #1f2937; }
+    .toggle-btn {
+      position: fixed; bottom: 16px; left: 16px; z-index: 50; padding: 0; border: 0;
+      background: transparent; cursor: pointer; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.28);
+    }
+    .panel {
+      position: fixed; left: 16px; bottom: 72px; z-index: 40;
+      width: min(720px, 94vw); height: min(70vh, 720px);
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--tt-bg); color: var(--tt-fg); border: 1px solid var(--tt-border);
+      border-radius: 12px; box-shadow: 0 20px 48px rgba(0,0,0,.5);
+    }
+    .panel.hidden { display: none; }
+    body.docked .host { display: none; }
+    body.docked .toggle-btn, body.docked .tt-close { display: none; }
+    body.docked .panel {
+      inset: 0; left: 0; bottom: 0; width: 100%; height: 100%;
+      max-height: none; border-radius: 0; display: flex;
+    }
+    .hdr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--tt-border); background: var(--tt-elev); }
+    .title { font-size: 14px; font-weight: 700; margin: 0; }
+    .badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--tt-border); color: var(--tt-muted); background: var(--tt-elev-2); }
+    .badge.ok { color: #bbf7d0; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.12); }
+    .badge.warn { color: #fde68a; border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.12); }
+    .badge.err { color: #fecdd3; border-color: rgba(244,63,94,.4); background: rgba(244,63,94,.12); }
+    .badge.info { color: #bfdbfe; border-color: rgba(91,140,255,.4); background: rgba(91,140,255,.12); }
+    .hdr-actions { margin-left: auto; display: flex; gap: 4px; }
+    .btn { font-size: 11px; border-radius: 6px; border: 1px solid var(--tt-border); background: var(--tt-elev-2); color: var(--tt-fg); padding: 3px 8px; cursor: pointer; }
+    .btn.primary { background: rgba(91,140,255,.2); border-color: rgba(91,140,255,.5); color: #dbeafe; }
+    .btn.ghost { background: transparent; }
+    .session { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 6px 12px; font-size: 11px; color: var(--tt-muted); border-bottom: 1px solid var(--tt-border); }
+    .id { font-family: var(--tt-mono); font-size: 11px; color: #b7ccff; background: var(--tt-elev-2); border: 1px solid var(--tt-border); border-radius: 6px; padding: 1px 6px; }
+    .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; overflow: hidden; }
+    .list { border-right: 1px solid var(--tt-border); background: #0c1117; display: flex; flex-direction: column; min-height: 0; }
+    .tools { padding: 8px; display: grid; gap: 6px; border-bottom: 1px solid #1a2430; }
+    .search { width: 100%; background: var(--tt-elev); border: 1px solid var(--tt-border); color: var(--tt-fg); border-radius: 7px; padding: 6px 8px; font-size: 12px; }
+    .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+    .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--tt-border); background: transparent; color: var(--tt-muted); }
+    .chip.on { background: rgba(91,140,255,.14); border-color: rgba(91,140,255,.45); color: #b7ccff; }
+    .turns { overflow: auto; }
+    .item { padding: 10px 12px; border-bottom: 1px solid #1a2430; cursor: pointer; }
+    .item.active { background: rgba(91,140,255,.14); box-shadow: inset 3px 0 0 var(--tt-accent); }
+    .item .row1 { display: flex; gap: 6px; font-size: 11px; color: var(--tt-muted); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tt-ok); margin-top: 4px; }
+    .dot.warn { background: var(--tt-warn); }
+    .dot.err { background: var(--tt-err); }
+    .item .q { font-size: 12.5px; font-weight: 500; margin-top: 4px; }
+    .detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .dhead { padding: 10px 12px 6px; border-bottom: 1px solid var(--tt-border); }
+    .dtitle { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+    .metric { background: var(--tt-elev); border: 1px solid var(--tt-border); border-radius: 8px; padding: 6px 8px; }
+    .metric .k { font-size: 10px; color: var(--tt-dim); text-transform: uppercase; letter-spacing: .04em; }
+    .metric .v { font-size: 13px; font-weight: 650; font-family: var(--tt-mono); }
+    .metric .sub { font-size: 11px; color: var(--tt-muted); }
+    .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #1a2430; margin-top: 4px; }
+    .bar i { display: block; height: 100%; }
+    .bar .ai { background: var(--tt-ai); } .bar .zeus { background: var(--tt-zeus); } .bar .other { background: var(--tt-other); }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .tag { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--tt-border); background: #121820; color: #8b9bb0; }
+    .diag { margin: 8px 12px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(245,158,11,.35); background: rgba(245,158,11,.1); }
+    .diag.fail { border-color: rgba(244,63,94,.4); background: rgba(244,63,94,.12); }
+    .diag h3 { margin: 0 0 4px; font-size: 14px; }
+    .diag p { margin: 0; font-size: 12px; color: var(--tt-muted); }
+    .tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--tt-border); }
+    .tab { background: transparent; border: 0; color: var(--tt-muted); font-size: 12px; font-weight: 600; padding: 6px 10px; border-bottom: 2px solid transparent; cursor: pointer; }
+    .tab.on { color: var(--tt-fg); border-bottom-color: var(--tt-accent); }
+    .panels { flex: 1; overflow: auto; padding: 10px 12px 16px; font-size: 12px; color: var(--tt-muted); }
+    .wf { display: grid; grid-template-columns: 120px 1fr 56px; gap: 6px 10px; align-items: center; font: 11px var(--tt-mono); }
+    .track { height: 10px; background: #1a2430; border-radius: 3px; position: relative; }
+    .track i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+    .empty { padding: 24px; color: var(--tt-muted); flex: 1; }
+    .foot { display: flex; justify-content: flex-end; padding: 6px 12px; border-top: 1px solid var(--tt-border); background: var(--tt-elev); font: 10px var(--tt-mono); color: var(--tt-dim); }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .io { border: 1px solid var(--tt-border); border-radius: 8px; background: var(--tt-elev); }
+    .io header { padding: 6px 8px; border-bottom: 1px solid var(--tt-border); font-size: 11px; font-weight: 650; }
+    .io pre { margin: 0; padding: 8px; font: 11px/1.4 var(--tt-mono); color: #c9d4e3; white-space: pre-wrap; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; color: var(--tt-dim); padding: 4px 6px; border-bottom: 1px solid var(--tt-border); }
+    td { padding: 6px; border-bottom: 1px solid rgba(36,48,65,.7); }
+    tr.sel { background: rgba(91,140,255,.12); }
+    @media (max-width: 720px) {
+      .body { grid-template-columns: 1fr; }
+      .list { max-height: 160px; border-right: 0; border-bottom: 1px solid var(--tt-border); }
+      .metrics, .split { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="host">
+    <h1>Host page (mock)</h1>
+    <p>Chat UI stays here. The tracer is a floating overlay (or a docked pane). Switch states to review empty / healthy / fail / cache / Layer A / job.</p>
+    <div class="sketch-bar" id="states">
+      <button type="button" data-state="empty">Empty</button>
+      <button type="button" class="on" data-state="healthy">Healthy</button>
+      <button type="button" data-state="fail">Failed hop</button>
+      <button type="button" data-state="cache">Semantic cache</button>
+      <button type="button" data-state="layera">Layer A</button>
+      <button type="button" data-state="job">Job units</button>
+      <button type="button" data-mount="overlay" class="on">Overlay</button>
+      <button type="button" data-mount="docked">Docked</button>
+    </div>
+  </div>
+
+  <button type="button" class="toggle-btn" id="toggle" aria-label="Toggle Zeus Tracer" title="Toggle Zeus Tracer">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+      <rect width="64" height="64" rx="10" ry="10" fill="#1f2937" />
+      <path d="M36 6 L14 36 H28 L24 58 L50 26 H34 Z" fill="#facc15" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round" />
+    </svg>
+  </button>
+
+  <aside class="panel" id="panel" role="dialog" aria-labelledby="title">
+    <header class="hdr">
+      <h2 class="title" id="title">Zeus Tracer</h2>
+      <span class="badge" id="count">3 turns</span>
+      <span class="badge info">client v2.3.0</span>
+      <div class="hdr-actions">
+        <button class="btn ghost" type="button">Export</button>
+        <button class="btn ghost" type="button">Copy all</button>
+        <button class="btn primary" type="button">Detective ↗</button>
+        <button class="btn ghost tt-close" type="button" id="close" aria-label="Close">✕</button>
+      </div>
+    </header>
+    <div class="session" id="session"></div>
+    <div class="body" id="body">
+      <nav class="list">
+        <div class="tools">
+          <input class="search" placeholder="Filter turns, tools, req_id…" />
+          <div class="chips">
+            <span class="chip on">All</span><span class="chip">Errors</span><span class="chip">Has tools</span>
+          </div>
+        </div>
+        <div class="turns" id="turns"></div>
+      </nav>
+      <div class="detail">
+        <div class="dhead">
+          <div class="dtitle" id="dtitle">How many IPA breweries are in Colorado with abv &gt; 6.5?</div>
+          <div class="metrics">
+            <div class="metric"><div class="k">Wall</div><div class="v">1.81s</div><div class="bar"><i class="ai" style="width:62%"></i><i class="zeus" style="width:31%"></i><i class="other" style="width:7%"></i></div></div>
+            <div class="metric"><div class="k">AI / Zeus</div><div class="v">1.12s <span class="sub">/ 560ms</span></div></div>
+            <div class="metric"><div class="k">Tokens</div><div class="v">4,490</div><div class="sub">in 4,102 · out 388 · cached 512</div></div>
+            <div class="metric"><div class="k">Turn ID</div><div class="v sub" style="color:#b7ccff">turn_8f3a2c91…</div></div>
+          </div>
+          <div class="chip-row" id="chips"><span class="tag">MINI yes</span><span class="tag">BRIEF yes</span><span class="tag">base-5.3</span><span class="tag">floor-5</span></div>
+        </div>
+        <div class="diag" id="diag" hidden>
+          <div class="badge warn">diagnosis warn</div>
+          <h3>0-row hop then broaden</h3>
+          <p>Playbooks: relax filter · check collection</p>
+        </div>
+        <div class="tabs" id="tabs">
+          <button class="tab on" data-tab="timeline" type="button">Timeline</button>
+          <button class="tab" data-tab="hops" type="button">Hops <span class="badge">3</span></button>
+          <button class="tab" data-tab="llm" type="button">LLM I/O</button>
+          <button class="tab" data-tab="inject" type="button">Inject / goal</button>
+          <button class="tab" data-tab="detective" type="button">Detective</button>
+          <button class="tab" data-tab="raw" type="button">Raw</button>
+        </div>
+        <div class="panels" id="panels"></div>
+      </div>
+    </div>
+    <div class="empty" id="empty" hidden>No turn run yet.</div>
+    <footer class="foot">v1.0.0</footer>
+  </aside>
+
+  <script>
+    const panels = {
+      timeline: `<div class="wf">
+        <div>ai.chat.round.1</div><div class="track"><i class="ai" style="left:0;width:55%;background:var(--tt-ai)"></i></div><div>1.00s</div>
+        <div>tool.search</div><div class="track"><i style="left:55%;width:20%;background:var(--tt-zeus)"></i></div><div>360ms</div>
+        <div>tool.pipeline.project</div><div class="track"><i style="left:75%;width:12%;background:var(--tt-zeus)"></i></div><div>200ms</div>
+        <div>other</div><div class="track"><i style="left:87%;width:13%;background:var(--tt-other)"></i></div><div>250ms</div>
+      </div>`,
+      hops: `<table><thead><tr><th>req_id</th><th>Verb</th><th>Status</th><th>ms</th></tr></thead>
+        <tbody><tr class="sel"><td>★ 25ef66c2…</td><td>search</td><td>200</td><td>360</td></tr>
+        <tr><td>aa11c90e…</td><td>pipeline</td><td>200</td><td>200</td></tr></tbody></table>
+        <div class="split" style="margin-top:10px"><div class="io"><header>Request</header><pre>{"verb":"search","q":"IPA Colorado abv>6.5"}</pre></div>
+        <div class="io"><header>Response</header><pre>{"status":200,"rows":47}</pre></div></div>`,
+      llm: `<div class="split"><div class="io"><header>AI request</header><pre>{"model":"grok-4","messages":[…]}</pre></div>
+        <div class="io"><header>AI response</header><pre>{"finish_reason":"tool_calls"}</pre></div></div>`,
+      inject: `<div class="io"><header>inject / catalog</header><pre>{"has_mini_schema":true,"has_scope_brief":true,"base_id":"base-5.3","client_floor":"5"}</pre></div>`,
+      detective: `<p>diagnosis:pass · prompt 6/6 PASSED</p><p>✓ No playbooks triggered</p>`,
+      raw: `<div class="io"><header>public_trace projection</header><pre>{ "turn_id": "turn_8f3a…", "hops": […], "tokens": { "prompt": 4102, "completion": 388, "cached": 512 } }</pre></div>`
+    };
+    const states = {
+      empty: () => {
+        document.getElementById("body").hidden = true;
+        document.getElementById("empty").hidden = false;
+        document.getElementById("session").hidden = true;
+        document.getElementById("count").textContent = "0 turns";
+      },
+      healthy: () => fill({ title: "Zeus Tracer", n: "3 turns", warn: false }),
+      fail: () => fill({ title: "Zeus Tracer", n: "3 turns", warn: true }),
+      cache: () => fill({ title: "Zeus Tracer", n: "2 turns", warn: false, cache: true }),
+      layera: () => fill({ title: "Zeus Tracer", n: "1 turn", warn: false, layer: true }),
+      job: () => fill({ title: "Job traces", n: "4 units", warn: false, job: true }),
+    };
+    function fill({ title, n, warn, cache, layer, job }) {
+      document.getElementById("body").hidden = false;
+      document.getElementById("empty").hidden = true;
+      document.getElementById("session").hidden = false;
+      document.getElementById("title").textContent = title;
+      document.getElementById("count").textContent = n;
+      document.getElementById("diag").hidden = !warn;
+      document.getElementById("session").innerHTML =
+        job
+          ? `job <span class="id">job_travel_paris_sf</span> · pack <strong>travel</strong> · 4 units`
+          : `Session <span class="id">sess_8f3a2c91…</span> · round <strong>3</strong> · <span class="badge ok">contract:match</span> · preferred <span class="id">25ef66c2…</span> · <a style="color:#9cbcff">Hub session ↗</a>` +
+            (cache ? ` · <span class="badge info">cache:recall</span>` : "") +
+            (layer ? ` · <span class="badge info">layer_a</span>` : "");
+      document.getElementById("turns").innerHTML = job
+        ? `<div class="item active"><div class="row1"><span class="dot"></span><span>u_agent_1</span></div><div class="q">Plan Paris → SF</div></div>
+           <div class="item"><div class="row1"><span class="dot"></span><span>u_direct_2</span></div><div class="q">find flights</div></div>`
+        : `<div class="item active"><div class="row1"><span class="dot${warn ? " warn" : ""}"></span><span>#3</span><span>1.81s</span></div><div class="q">How many IPA breweries are in Colorado with abv &gt; 6.5?</div></div>
+           <div class="item"><div class="row1"><span class="dot"></span><span>#2</span><span>0.94s</span></div><div class="q">Show the pipeline you used</div></div>
+           <div class="item"><div class="row1"><span class="dot"></span><span>#1</span><span>2.10s</span></div><div class="q">List top West Coast IPAs</div></div>`;
+      document.getElementById("panels").innerHTML = panels.timeline;
+    }
+    document.getElementById("toggle").onclick = () => document.getElementById("panel").classList.toggle("hidden");
+    document.getElementById("close").onclick = () => document.getElementById("panel").classList.add("hidden");
+    document.getElementById("tabs").onclick = (e) => {
+      const t = e.target.closest(".tab"); if (!t) return;
+      document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("on", b === t));
+      document.getElementById("panels").innerHTML = panels[t.dataset.tab] || panels.timeline;
+    };
+    document.getElementById("states").onclick = (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.state) {
+        document.querySelectorAll("[data-state]").forEach((x) => x.classList.toggle("on", x === b));
+        states[b.dataset.state]();
+      }
+      if (b.dataset.mount) {
+        document.querySelectorAll("[data-mount]").forEach((x) => x.classList.toggle("on", x === b));
+        document.body.classList.toggle("docked", b.dataset.mount === "docked");
+        document.getElementById("panel").classList.remove("hidden");
+      }
+    };
+    states.healthy();
+  </script>
+</body>
+</html>

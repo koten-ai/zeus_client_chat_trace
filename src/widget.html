@@ -2,7 +2,7 @@
   type="button"
   id="debug-toggle"
   class="debug-toggle-btn"
-  title="Toggle Zeus trace panel"
+  title="Toggle Zeus Tracer"
   aria-expanded="false"
   aria-label="Toggle Zeus Tracer"
 >
@@ -12,49 +12,64 @@
   </svg>
 </button>
 
-<aside id="debug-panel" class="debug-panel is-hidden" aria-hidden="true" role="dialog" aria-labelledby="debug-panel-title">
-  <header class="debug-panel-header">
-    <div class="debug-panel-title-row">
-      <h2 id="debug-panel-title" class="debug-panel-title">Zeus Tracer</h2>
-      <span class="debug-title-dot" aria-hidden="true">·</span>
-      <a
-        id="debug-detective-link"
-        class="debug-detective-link is-disabled"
-        href="#"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-disabled="true"
-        title="Open Hub Detective for this session"
-        hidden
-      >Detective</a>
+<aside id="debug-panel" class="debug-panel tt-panel is-hidden" aria-hidden="true" role="dialog" aria-labelledby="debug-panel-title">
+  <div class="tt-panel-inner" id="tt-panel">
+    <header class="tt-header">
+      <h2 id="debug-panel-title" class="tt-title">Zeus Tracer</h2>
+      <span class="tt-badge" id="tt-turn-count">0 turns</span>
+      <span class="tt-badge tt-badge-info" id="tt-client-ver" hidden></span>
+      <div class="tt-hdr-actions">
+        <button type="button" class="tt-btn ghost" id="tt-export" title="Download journal JSON">Export</button>
+        <button type="button" class="tt-btn ghost" id="tt-copy-all" data-action="copy-all" title="Copy full trace bundle">Copy all</button>
+        <button type="button" class="tt-btn primary" id="tt-detective" title="Open Hub Detective">Detective ↗</button>
+        <button type="button" class="tt-btn ghost tt-close" id="debug-close" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+    <div class="tt-session" id="tt-session" hidden></div>
+    <div class="tt-body" id="tt-body" hidden>
+      <nav class="tt-turn-list" aria-label="Turns">
+        <div class="tt-list-tools">
+          <input class="tt-search" id="tt-search" placeholder="Filter turns, tools, req_id…" />
+          <div class="tt-filters" id="tt-filters">
+            <button type="button" class="tt-chip on" data-filter="all">All</button>
+            <button type="button" class="tt-chip" data-filter="error">Errors</button>
+            <button type="button" class="tt-chip" data-filter="tools">Has tools</button>
+            <button type="button" class="tt-chip" data-filter="agent" hidden>Agent</button>
+          </div>
+        </div>
+        <div id="tt-turns" class="tt-turns"></div>
+      </nav>
+      <div class="tt-detail">
+        <div class="tt-detail-head" id="tt-detail-head"></div>
+        <div class="tt-diagnosis" id="tt-diagnosis" hidden></div>
+        <div class="tt-tabs" role="tablist">
+          <button type="button" class="tt-tab on" data-tab="timeline" data-turn role="tab">Timeline</button>
+          <button type="button" class="tt-tab" data-tab="hops" data-turn data-job role="tab">Hops <span class="tt-count" id="tt-hop-count">0</span></button>
+          <button type="button" class="tt-tab" data-tab="llm" data-turn data-job role="tab">LLM I/O</button>
+          <button type="button" class="tt-tab" data-tab="inject" data-turn data-job role="tab">Inject / goal</button>
+          <button type="button" class="tt-tab" data-tab="detective" data-turn role="tab">Detective</button>
+          <button type="button" class="tt-tab" data-tab="raw" data-turn data-job role="tab">Raw</button>
+        </div>
+        <div class="tt-tab-panels">
+          <div class="tt-tab-panel on" id="tt-panel-timeline" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-hops" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-llm" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-inject" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-detective" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-raw" role="tabpanel"></div>
+        </div>
+      </div>
     </div>
-    <div class="debug-panel-actions">
-      <button type="button" id="trace-copy-full" class="btn-copy-all" title="Copy all traces as JSON">
-        <svg class="btn-copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-        <span>Copy All</span>
-      </button>
-      <button type="button" id="debug-close" class="btn-close" aria-label="Close">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <path d="M18 6L6 18M6 6l12 12"></path>
-        </svg>
-      </button>
+    <div id="tt-empty" class="tt-empty">No turn run yet.</div>
+    <footer id="debug-panel-footer" class="debug-panel-footer" aria-label="Widget version">
+      <span id="debug-panel-version" class="debug-panel-version">v—</span>
+    </footer>
+    <div id="toast" class="tt-toast hidden" role="status" aria-live="polite">
+      <span id="toast-msg"></span>
     </div>
-  </header>
-
-  <div id="trace-total-wrapper" class="trace-total-wrapper" style="display:none"></div>
-
-  <div id="trace-list" class="trace-list">
-    <div id="trace-empty" class="trace-empty">No search run yet.</div>
   </div>
-
-  <footer id="debug-panel-footer" class="debug-panel-footer" aria-label="Widget version">
-    <span id="debug-panel-version" class="debug-panel-version">v—</span>
-  </footer>
 </aside>
-
-<div id="toast" class="toast toast-bottom toast-end z-high hidden">
-  <div class="alert alert-success text-sm py-2"><span id="toast-msg"></span></div>
-</div>

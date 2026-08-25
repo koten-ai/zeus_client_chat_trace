@@ -1,32 +1,36 @@
 # Guide: Embeddable Trace Widget
 
-**Date**: 2026-08-05  
-**Feature**: Single-script Zeus trace debugger embeddable in any host page  
+**Date**: 2026-08-21  
+**Feature**: Single-script Zeus Tracer inspector embeddable in any host page  
 **Status**: Active  
-**Related Plan**: `.grok/plans/EMBEDDABLE_TRACE_WIDGET.md`, `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/TOOL_CALL_ROUNDS_DUMP.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/CARD_HEAD_STAT_GRID.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`, `.grok/plans/TRACE_CARD_COLLAPSE.md`
+**Related Plan**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (supersedes stacked-card `WIDGET_UI_REDESIGN.md`)
 
 ## 1. Overview
-- **Purpose**: Inject a floating Zeus trace panel into third-party pages via one async script tag.
-- **Scope**: UI widget, trace rendering, tool-order chart, JSON dumps (lazy jsnview), panel title **Zeus Tracer** + Hub Detective deep-link by **session_id**. Does not perform searches itself. **Kill switch** gates mount via `?debug=true` / `enabled`.
-- **Entry points**: `dist/zeus_client_chat_trace.js`, `window.appendTraceCard`, `window.openDebugPanel`
+- **Purpose**: Inject a floating (or docked) Zeus Tracer inspector into third-party pages via one async script tag.
+- **Scope**: Inspector UI aligned with `zeus_client` Turn traces; ingest of `kotenai-zeus-client` 2.3.0 `TurnResult.debug` / `public_trace`. Kill switch via `?debug=true` / `enabled`. Does not perform searches.
+- **Entry points**: `dist/zeus_client_chat_trace.js`, `window.appendTraceCard`, `window.openDebugPanel`, `ZeusTrace.ready`
 
 ## 2. Architecture & Flow
 
 1. Host sets `window.ZeusTraceConfig` (optional) and loads the bundle.
 2. `bootstrap.js` queues early API calls, resolves **enabled** (explicit config → `?debug=` → default false).
 3. If **disabled**: install no-op APIs, no DOM, resolve `ZeusTrace.ready`.
-4. If **enabled**: mounts Shadow DOM on `#zeus-trace-host`, injects DaisyUI + CSS/HTML, `initZeusTrace`.
+4. If **enabled**: mounts Shadow DOM on `#zeus-trace-host` (overlay) or `mountSelector` (docked). **No DaisyUI.**
 5. tool-order is applied from injected `toolOrder` when present; otherwise a **background** fetch of `/api/tool-order` runs (default 3s abort) and never blocks mount.
-6. Host calls `appendTraceCard(question, responseJson)` after each search. Globals are live as soon as bootstrap finishes (`ZeusTrace.ready`), independent of tool-order.
-7. Each card renders a **collapsible session head** (button: `#N` + query + meta + chevron; click toggles body), optional **contract/session badges** (split pills), **KPI tile grid** (under head body), optional **Layer A** (primary key|value pills + code blocks for QD/decomp), per-card timing bar, waterfall rows, tool-frequency chart, **Hash Traces**, and collapsible dumps. Cards start expanded; collapsed state is `.trace-card.is-collapsed` (body `display: none`).
-8. Panel chrome: **Zeus Tracer · Detective** header, blue **Copy All**, close; top **token tiles** (In/Out/Total) + **Total progress bar** (AI orange / Zeus teal / Other gray); footer version pill.
+6. Host calls `appendTraceCard(question, responseJson)` after each search (`trace` or `debug` required).
+7. `normalize.js` builds a turn view-model; `panel.js` renders list + tabs (Timeline, Hops, LLM I/O, Inject, Detective, Raw). Diagnosis strip auto-opens Detective when grade ≠ pass or hop ≥ 400. Hops `Bytes` is filled from hop size fields, matching tool-step `bytes`, or UTF-8 of `result_json` / `res` / `snippet` (`result_size` is a row count, not bytes).
+8. Overlay chrome: lightning toggle, close, version footer. Docked chrome hides toggle/close and fills the slot.
 
 **Key components**:
 - `src/bootstrap.js` — mount (or skip), queue, global API
-- `src/trace.js` — trace card rendering; `extractSessionId` / `updateDebugTitle` for panel header; `extractLayerA` / `buildLayerAEl` for base-5 terminate
-- `src/config.js` — `zeusApiUrl` / `zeusAuthToken` / `hubBaseUrl` / **`enabled`** resolution; `detectiveUrl`; `resolveEnabled` / `readDebugQueryParam`
-- `src/jsnview-loader.js` — lazy CDN load for JSON viewer (`index.min.js`; pre fallback)
-- `src/widget.html` / `src/widget.css` — panel chrome including title + Detective link + Layer A styles
+- `src/trace.js` — overlay/docked facade, tool-order, toast
+- `src/panel.js` — inspector (ported from `zeus_client/static/trace_panel.js`)
+- `src/normalize.js` — legacy + 2.3.0 payload coerce / view-model
+- `src/helpers.js` — waterfall, hops, detective formatters
+- `src/config.js` — `zeusApiUrl` / `hubBaseUrl` / `enabled` / `mount` / `mountSelector`
+- `src/jsnview-loader.js` — lazy CDN load for JSON viewer
+- `src/widget.html` / `src/widget.css` — overlay + `.tt-*` inspector
+- `sketches/v1-overlay-inspector/` — locked visual mockup
 
 **Enabled resolution** (first decisive wins):
 1. `ZeusTraceConfig.enabled` or script `data-enabled` (`true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`)
@@ -118,7 +122,9 @@ window.appendTraceCard(query, {
 window.openDebugPanel?.();
 ```
 
-**Local demo**: `npm run build && npm run serve` then open `http://localhost:5199/examples/embed.html` (demo sets `enabled: true`).
+**Local playground** (widget fills the browser, not published): `npm start` then open `http://localhost:5199/`. Overlay: `http://localhost:5199/?mount=overlay`. See `.grok/guides/LOCAL_DEV_PLAYGROUND.md`.
+
+**Host-page demo**: `npm run build && npm run serve` then open `http://localhost:5199/examples/embed.html` (demo sets `enabled: true`).
 
 **`appendTraceCard(question, j)`** requires `j.trace` object (steps, spans, tool_calls, etc.). Prefer also passing `session_id`. No-op when disabled.
 
@@ -169,20 +175,23 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 |---------|--------------|-----|
 | No `#zeus-trace-host` / no toggle | Kill switch default off | `?debug=true` or `enabled: true` |
 | Tool chart empty order | No `toolOrder` / no `zeusApiUrl` or API unreachable | Inject `ZeusTraceConfig.toolOrder` or set same-origin `zeusApiUrl`; check Network tab |
-| Widget open but no cards | Missing `appendTraceCard` call or `trace` field | Host must pass response with `trace` |
+| Widget open but no cards | Missing `appendTraceCard` call or `trace`/`debug` field | Host must pass response with `trace` or `debug` |
+| Hops `Bytes` is `—` | 2.3.0 hop omitted `bytes` and had no `result_json`/`snippet`/step bytes | Widget estimates from body when present; `result_size` is rows, not bytes |
 | Panel not visible (host present) | Starts with `is-hidden` | Click toggle or `openDebugPanel()` |
 | Detective link hidden | Missing `hubBaseUrl` or `session_id` | Set `ZeusTraceConfig.hubBaseUrl`; ensure host forwards `session_id` |
 | Detective still hits `/hub/debug/req/...` | Stale vendored bundle | Rebuild + sync `zeus_client_chat_trace.js` to host static |
 | No Tool calls / AI rounds dumps | Stale bundle with broken jsnview URL (`index.umd.js` 404) hanging dump attach | Rebuild/redeploy `dist/zeus_client_chat_trace.js` (uses `index.min.js`; dumps attach before jsnview) |
 | Hash Traces empty | `trace.steps` and `trace.tool_calls` both empty | Confirm host forwards full search `trace` payload |
+| Click-to-copy / Copy does nothing | `clipboard.writeText` rejected in Shadow DOM; toast was off-panel | Rebuild; copy uses sync `execCommand` first; toast lives inside `#tt-panel`. See `.grok/guides/CLICK_TO_COPY.md` |
 | JSON dumps show plain pre | jsnview CDN blocked | Allow cdn.jsdelivr.net; pre fallback is expected and still shows data |
 | Early calls lost | Script not async-safe | Use built-in queue (calls before load are buffered) |
-| Styles missing | DaisyUI CDN blocked | Allow cdn.jsdelivr.net (collapse/toast); core chrome is self-contained CSS |
+| Styles missing | Stale 0.1.x bundle or blocked shadow | Rebuild v1.0.0 (no DaisyUI); inspect `#zeus-trace-host` shadow root |
 | KPI tiles / Layer A labels overlap; huge floating numbers | Flex column + `min-height:0` collapsed `.tc-kpi-mini` to 0 while tiles overflow | v0.1.12+ layout lock (`flex-shrink:0` on card/body children; KPI `min-height:auto`) — rebuild/redeploy bundle |
 
 **Debug checklist**:
 - [ ] `ZeusTrace.config.enabled === true` (or open with `?debug=true`)
 - [ ] Network: `jsnview` loads from `…/jsnview@3.0.0/dist/index.min.js` (not `index.umd.js`)
+- [ ] Turn list shows the query; Timeline waterfall renders
 - [ ] Card header shows `N rounds`
 - [ ] Expand **Hash Traces** for `[r1] LLM` / `[r1] TOOL …` lines
 - [ ] Expand **Tool calls · N** (open by default when N > 0); each record has `round`
@@ -194,17 +203,25 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - [ ] Detective link href is `{hubBaseUrl}/hub/debug/session/{session_id}` and opens in a new tab
 
 ## 6. Related Artifacts
-- **Files**: `src/widget.html`, `src/widget.css`, `src/bootstrap.js`, `src/trace.js`, `src/config.js`, `examples/embed.html`, `dist/zeus_client_chat_trace.js`, `scripts/upload_dist_cdn.sh`
+- **Files**: `src/widget.html`, `src/widget.css`, `src/bootstrap.js`, `src/trace.js`, `src/panel.js`, `src/normalize.js`, `src/helpers.js`, `src/config.js`, `sketches/v1-overlay-inspector/`, `dev/index.html`, `examples/embed.html`, `dist/zeus_client_chat_trace.js`
 - **CDN**: Space `koten-static-cdn` (nyc3) → `*.cdn.digitaloceanspaces.com`; publish via `npm run publish:cdn`
 - **Tickets**:
   - [ZC-31](https://kotenai.atlassian.net/browse/ZC-31) — embeddable widget
   - [ZC-43](https://kotenai.atlassian.net/browse/ZC-43) — original request-id Detective link (superseded path by session link)
-- **Plans**: `.grok/plans/WIDGET_UI_REDESIGN.md`, `.grok/plans/ZC43_REQUEST_ID_DETECTIVE_LINK.md`, `.grok/plans/DETECTIVE_SESSION_LINK.md`, `.grok/plans/DEBUG_QUERY_KILL_SWITCH.md`, `.grok/plans/LAYER_A_TRACE_PANEL.md`, `.grok/plans/TRACE_CARD_COLLAPSE.md`
+- **Plans**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (current); older stacked-card plans superseded
 
 ## 7. Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-25 | Grok | Hops `Bytes` column: aliases + matching step + payload estimate (2.3.0 hops omit `bytes`) |
+| 2026-08-25 | Grok | Raw tab JSON viewer font matches inspector `--tt-mono` 11px |
+| 2026-08-25 | Grok | Pin 1.0.0 into `demo_travel_sample` (vendored `/static/…?v=1.0.0`, not CDN latest) |
+| 2026-08-25 | Grok | Fix tracer UI: unclosed `.vbar-col .n` nested all `.tt-*` CSS; `[hidden]` honor; docked `display:block` |
+| 2026-08-25 | Grok | Local playground: `npm start` → http://localhost:5199/ |
+| 2026-08-25 | Grok | Click-to-copy: Shadow DOM–safe clipboard (sync execCommand + Clipboard API); in-panel toast |
+| 2026-08-25 | Grok | Package / CDN version **1.1.0** |
+| 2026-08-21 | Grok | **v1.0.0** inspector: drop DaisyUI stacked cards; align with `zeus_client` Turn traces + python 2.3.0 `debug`/`public_trace` |
 | 2026-08-05 | agent | Release v0.1.13: AI/Zeus/Other % labels always sum to 100 (largest-remainder); tighter card/totals padding |
 | 2026-08-05 | agent | Release v0.1.12: fix trace-card-body flex collapse (KPI/Layer A overlap) |
 | 2026-08-05 | agent | Release v0.1.11: tighter panel header + token tile padding; CDN publish |

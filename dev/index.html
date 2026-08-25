@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zeus Tracer — local playground</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: #111827;
+      --line: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #facc15;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--text);
+      font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+    }
+    .bar {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar h1 {
+      margin: 0 8px 0 0;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    .bar h1 span { color: var(--accent); }
+    .bar .note { color: var(--muted); margin-right: auto; }
+    .bar button, .bar a, .bar label.file {
+      appearance: none;
+      border: 1px solid #374151;
+      background: #1f2937;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font: inherit;
+      text-decoration: none;
+    }
+    .bar button:hover, .bar a:hover, .bar label.file:hover { border-color: #6b7280; }
+    .bar button.on { border-color: var(--accent); color: var(--accent); }
+    .bar input[type="file"] { display: none; }
+    #trace-slot {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+    }
+    body.mount-overlay #trace-slot { display: none; }
+    body.mount-overlay .host-copy {
+      display: block;
+      max-width: 640px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: var(--muted);
+    }
+    .host-copy { display: none; }
+    details.paste {
+      width: 100%;
+      border-top: 1px solid var(--line);
+      background: #0f172a;
+    }
+    details.paste summary {
+      cursor: pointer;
+      padding: 6px 12px;
+      color: var(--muted);
+    }
+    details.paste .paste-body {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 0 12px 10px;
+    }
+    details.paste textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      background: #020617;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 8px;
+    }
+    .err { color: #fca5a5; padding: 0 12px 8px; min-height: 1em; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Zeus Tracer <span>playground</span></h1>
+    <span class="note">Local only — not published to CDN. Refresh after a rebuild.</span>
+    <button type="button" data-fix="legacy">Legacy</button>
+    <button type="button" data-fix="v230">v2.3.0</button>
+    <button type="button" data-fix="fail">Fail</button>
+    <button type="button" data-fix="cache">Cache</button>
+    <button type="button" data-fix="job">Job</button>
+    <button type="button" id="btn-clear">Clear</button>
+    <label class="file">Load JSON<input type="file" id="file-json" accept="application/json,.json" /></label>
+    <a id="link-docked" href="/">Docked</a>
+    <a id="link-overlay" href="/?mount=overlay">Overlay</a>
+    <a href="/examples/embed.html">Host demo</a>
+  </div>
+  <details class="paste">
+    <summary>Paste Zeus JSON and append</summary>
+    <div class="paste-body">
+      <textarea id="paste-json" placeholder='{ "question": "…", "trace": { … } }  or  { "debug": { … } }'></textarea>
+      <button type="button" id="btn-paste">Append</button>
+    </div>
+    <div class="err" id="paste-err"></div>
+  </details>
+  <div id="trace-slot"></div>
+  <div class="host-copy">
+    <p>Overlay mode: the inspector floats over this fake host page. Click the lightning toggle (bottom-left) if it is closed.</p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const overlay = params.get("mount") === "overlay";
+    document.body.classList.toggle("mount-overlay", overlay);
+    document.getElementById("link-docked").classList.toggle("on", !overlay);
+    document.getElementById("link-overlay").classList.toggle("on", overlay);
+
+    window.ZeusTraceConfig = {
+      zeusApiUrl: "http://localhost:8080",
+      zeusAuthToken: "",
+      hubBaseUrl: "http://127.0.0.1:9091",
+      enabled: true,
+      mount: overlay ? "overlay" : "docked",
+      mountSelector: overlay ? "" : "#trace-slot",
+    };
+
+    const legacy = {
+      chat_id: "demo-chat-1",
+      session_id: "demo-sess-001",
+      session_round: 2,
+      contract_status: "match",
+      api_version: "v2",
+      target: "yelp-demo/_default/_default",
+      answer: "Paris is lovely in spring.",
+      trace: {
+        rounds: 2,
+        total_ms: 1880,
+        spans: [
+          { name: "llm.round1", cls: "ai", at: 0, ms: 1100 },
+          { name: "tool.search", cls: "tool", at: 1100, ms: 560 },
+          { name: "llm.round2", cls: "ai", at: 1660, ms: 220 },
+        ],
+        steps: [
+          { type: "llm", round: 1, ms: 1100, finish_reason: "tool_calls", tool_calls: ["search"], usage: { prompt_tokens: 800, completion_tokens: 40, total_tokens: 840 } },
+          { type: "tool", round: 1, name: "search", status: 200, ms: 560, bytes: 4096 },
+          { type: "llm", round: 2, ms: 220, finish_reason: "stop", usage: { prompt_tokens: 900, completion_tokens: 80, total_tokens: 980 } },
+        ],
+        ai_requests: [{ model: "grok-4" }, { model: "grok-4" }],
+        ai_responses: [{ finish_reason: "tool_calls" }, { finish_reason: "stop" }],
+        catalog: { has_mini_schema: true, has_scope_brief: true },
+      },
+    };
+
+    const v230 = {
+      question: "How many IPA breweries are in Colorado with abv > 6.5?",
+      chat_id: "chat-v230",
+      session_id: "sess_8f3a2c91",
+      session_round: 3,
+      contract_status: "match",
+      debug: {
+        turn_id: "turn_8f3a2c91-b4e0",
+        session_id: "sess_8f3a2c91",
+        preferred_req_id: "25ef66c2-aa11",
+        client_version: "2.3.0",
+        catalog: { has_mini_schema: true, has_scope_brief: true, base_id: "base-5.3", client_floor: "5" },
+        tokens: { prompt: 4102, completion: 388, total: 4490, cached: 512, ok: true },
+        stamp: { user: "zeus_client" },
+        hops: [
+          { req_id: "25ef66c2-aa11", name: "search", status: 200, ms: 360, bytes: 6144, preferred: true, req: { q: "IPA Colorado" }, res: { rows: 47 } },
+          { req_id: "aa11c90e-bb22", name: "pipeline", status: 200, ms: 200, bytes: 2048 },
+        ],
+        detective: {
+          diagnosis: { grade: "pass", headline: "Healthy turn", overview: "Preferred hop returned rows." },
+          prompt: { items: [{ lab: "MINI-SCHEMA", ok: true }, { lab: "SCOPE BRIEF", ok: true }] },
+        },
+        public_trace: {
+          rounds: 2,
+          total_ms: 1810,
+          notes: [],
+          steps: [
+            { type: "llm", round: 1, ms: 1000, finish_reason: "tool_calls" },
+            { type: "tool", round: 1, name: "search", status: 200, ms: 360 },
+            { type: "tool", round: 1, name: "pipeline", status: 200, ms: 200 },
+            { type: "llm", round: 2, ms: 250, finish_reason: "stop" },
+          ],
+          layer_a: { confidence: "high", policy_action: "answer", ok: true },
+          inject: { has_mini_schema: true, has_scope_brief: true },
+        },
+      },
+    };
+
+    const fail = {
+      question: "Count salons in Tampa",
+      session_id: "sess-fail",
+      session_round: 1,
+      contract_status: "drift",
+      debug: {
+        turn_id: "turn-fail",
+        preferred_req_id: "req-fail",
+        hops: [{ req_id: "req-fail", name: "search", status: 500, ms: 40, bytes: 96, res: { error: "0 rows" } }],
+        detective: {
+          diagnosis: { grade: "warn", headline: "0-row hop then broaden", overview: "Relax the city filter." },
+          playbooks: [{ id: "relax_filter", title: "Relax filter", body: "Drop exact city match." }],
+        },
+        public_trace: { rounds: 1, steps: [{ type: "tool", name: "search", status: 500, ms: 40 }], notes: [] },
+      },
+    };
+
+    const cache = {
+      question: "What did we decide about Denver?",
+      session_id: "sess-cache",
+      debug: {
+        turn_id: "turn-cache",
+        notes: ["semantic_cache.recall: blocks=2"],
+        stamp: { user: "zeus_client" },
+        public_trace: {
+          notes: ["semantic_cache.recall: blocks=2"],
+          inject: { has_mini_schema: true, semantic_memory: "User prefers IPA." },
+          steps: [{ type: "llm", ms: 180, finish_reason: "stop" }],
+        },
+      },
+    };
+
+    const job = {
+      question: "Plan Paris to SF",
+      trace: {
+        multi_agent: true,
+        job_id: "job_travel_paris_sf",
+        pack: "travel",
+        engine: "local_units",
+        units: [
+          { unit_id: "u_agent_1", status: "ok", kind: "agent_turn", goal: "Plan Paris → SF", wave: 1, req_ids: ["r1"], hops: [{ req_id: "r1", verb: "search", status: 200, ms: 90, bytes: 1024 }] },
+          { unit_id: "u_direct_2", status: "ok", kind: "zeus_direct", goal: "find flights", wave: 1, req_ids: ["r2"] },
+        ],
+      },
+    };
+
+    const FIXTURES = { legacy, v230, fail, cache, job };
+    const QUESTIONS = {
+      legacy: "Find hotels in Paris",
+      v230: v230.question,
+      fail: fail.question,
+      cache: cache.question,
+      job: job.question,
+    };
+
+    function questionFor(payload, fallback) {
+      return payload.question || fallback || "pasted payload";
+    }
+
+    function appendPayload(payload, fallbackQuestion) {
+      const err = document.getElementById("paste-err");
+      err.textContent = "";
+      if (!payload || typeof payload !== "object") {
+        err.textContent = "Need a JSON object with trace or debug.";
+        return;
+      }
+      if (!payload.trace && !payload.debug) {
+        err.textContent = "Payload must include trace or debug.";
+        return;
+      }
+      window.appendTraceCard(questionFor(payload, fallbackQuestion), payload);
+      window.openDebugPanel?.();
+    }
+
+    function boot(ready) {
+      const api = ready && ready.api;
+      document.querySelectorAll("[data-fix]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.getAttribute("data-fix");
+          appendPayload(FIXTURES[key], QUESTIONS[key]);
+        });
+      });
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        (api || window.ZeusTrace)?.clear?.();
+      });
+      document.getElementById("btn-paste").addEventListener("click", () => {
+        const raw = document.getElementById("paste-json").value.trim();
+        const err = document.getElementById("paste-err");
+        try {
+          appendPayload(JSON.parse(raw));
+        } catch (e) {
+          err.textContent = e.message || "Invalid JSON";
+        }
+      });
+      document.getElementById("file-json").addEventListener("change", async (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        const err = document.getElementById("paste-err");
+        err.textContent = "";
+        if (!file) return;
+        try {
+          appendPayload(JSON.parse(await file.text()), file.name);
+        } catch (e) {
+          err.textContent = e.message || "Invalid JSON file";
+        }
+        ev.target.value = "";
+      });
+
+      appendPayload(v230, v230.question);
+    }
+
+    const script = document.createElement("script");
+    script.src = "/dist/zeus_client_chat_trace.js?t=" + Date.now();
+    script.async = true;
+    script.onerror = () => {
+      document.getElementById("paste-err").textContent =
+        "Could not load /dist/zeus_client_chat_trace.js — run npm start (or npm run build).";
+    };
+    document.body.appendChild(script);
+
+    const waitReady = () =>
+      window.ZeusTrace && window.ZeusTrace.ready
+        ? window.ZeusTrace.ready.then(boot)
+        : setTimeout(waitReady, 30);
+    waitReady();
+  </script>
+</body>
+</html>

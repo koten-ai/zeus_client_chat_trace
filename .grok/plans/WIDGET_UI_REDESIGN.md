@@ -3,6 +3,7 @@
 **Date**: 2026-08-05
 **Task**: Restyle the Zeus Tracer embeddable panel to match the `code.html` dashboard mockup  
 **Priority**: High  
+**Status**: Superseded by `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (v1.0.0 inspector)  
 **Estimated Effort**: 2–3 hours / 5 steps
 
 ## 1. Context & Requirements

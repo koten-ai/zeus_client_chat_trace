@@ -1,12 +1,25 @@
 {
   "cleanUrls": false,
   "rewrites": [
+    { "source": "/", "destination": "/dev/index.html" },
+    { "source": "/dev", "destination": "/dev/index.html" },
     { "source": "/embed.html", "destination": "/examples/embed.html" }
+  ],
+  "headers": [
+    {
+      "source": "dist/**",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
+    {
+      "source": "dev/**",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
   ],
   "unlisted": [
     "node_modules",
     "src",
     "coverage",
-    ".git"
+    ".git",
+    ".grok"
   ]
 }

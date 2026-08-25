@@ -112,6 +112,16 @@ export function resolveConfig(options = {}) {
     ""
   ).replace(/\/$/, "");
 
+  const mountRaw = String(
+    fromWindow.mount || script?.dataset?.mount || "overlay"
+  ).toLowerCase();
+  const mount = mountRaw === "docked" ? "docked" : "overlay";
+  const mountSelector = (
+    fromWindow.mountSelector ||
+    script?.dataset?.mountSelector ||
+    ""
+  ).trim();
+
   return {
     zeusApiUrl,
     hubBaseUrl,
@@ -122,6 +132,8 @@ export function resolveConfig(options = {}) {
       "",
     toolOrder: parseToolOrder(fromWindow.toolOrder ?? script?.dataset?.toolOrder),
     enabled: resolveEnabled({ fromWindow, script, search: options.search }),
+    mount,
+    mountSelector,
   };
 }
 
@@ -131,6 +143,8 @@ export function publicConfig(config) {
     hubBaseUrl: config.hubBaseUrl,
     toolOrder: config.toolOrder,
     enabled: Boolean(config.enabled),
+    mount: config.mount || "overlay",
+    mountSelector: config.mountSelector || "",
     version: getWidgetVersion(),
   };
 }
