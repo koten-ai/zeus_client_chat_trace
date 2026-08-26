@@ -1,5 +1,6 @@
 const DEFAULT_API_URL = typeof __ZEUS_API_URL__ !== "undefined" ? __ZEUS_API_URL__ : "";
 const DEFAULT_AUTH_TOKEN = typeof __ZEUS_AUTH_TOKEN__ !== "undefined" ? __ZEUS_AUTH_TOKEN__ : "";
+const DEFAULT_HUB_URL = typeof __HUB_BASE_URL__ !== "undefined" ? __HUB_BASE_URL__ : "";
 const WIDGET_VERSION = typeof __WIDGET_VERSION__ !== "undefined" ? __WIDGET_VERSION__ : "dev";
 
 let loadingScript = null;
@@ -30,12 +31,45 @@ export function parseToolOrder(raw) {
   return null;
 }
 
+/**
+ * Hub origin from a workbench or Detective URL.
+ * Strips `#…` and a `/hub` *path* (e.g. `http://host:9091/hub/#/workbench` →
+ * `http://host:9091`). Must not treat hostname `hub` (`http://hub`) as a path.
+ */
+export function normalizeHubBase(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  const hash = s.indexOf("#");
+  if (hash >= 0) s = s.slice(0, hash);
+  s = s.replace(/\/+$/, "");
+  try {
+    const u = new URL(s);
+    const path = (u.pathname || "").replace(/\/+$/, "");
+    if (path.toLowerCase() === "/hub") return u.origin;
+    return s;
+  } catch {
+    if (/^https?:\/\/hub$/i.test(s)) return s;
+    s = s.replace(/\/hub$/i, "");
+    return s.replace(/\/+$/, "");
+  }
+}
+
+export function hubDebugReqUrl(base, rid) {
+  const origin = normalizeHubBase(base);
+  const id = String(rid || "").trim();
+  if (!origin || !id) return "";
+  return origin + "/hub/#/debug/req/" + encodeURIComponent(id);
+}
+
+export function hubDebugSessionUrl(base, sid) {
+  const origin = normalizeHubBase(base);
+  const id = String(sid || "").trim();
+  if (!origin || !id) return "";
+  return origin + "/hub/debug/session/" + encodeURIComponent(id);
+}
+
 export function detectiveUrl(hubBaseUrl, sessionId) {
-  if (!hubBaseUrl || !sessionId) return "";
-  const base = String(hubBaseUrl).replace(/\/$/, "");
-  const sid = String(sessionId).trim();
-  if (!sid) return "";
-  return `${base}/hub/debug/session/${encodeURIComponent(sid)}`;
+  return hubDebugSessionUrl(hubBaseUrl, sessionId);
 }
 
 /** @returns {boolean|null} null when unset / unrecognized */
@@ -106,11 +140,13 @@ export function resolveConfig(options = {}) {
     ""
   ).replace(/\/$/, "");
 
-  const hubBaseUrl = (
+  const hubBaseUrl = normalizeHubBase(
     fromWindow.hubBaseUrl ||
-    script?.dataset?.hubBaseUrl ||
-    ""
-  ).replace(/\/$/, "");
+      fromWindow.hub_url ||
+      script?.dataset?.hubBaseUrl ||
+      DEFAULT_HUB_URL ||
+      ""
+  );
 
   const mountRaw = String(
     fromWindow.mount || script?.dataset?.mount || "overlay"
@@ -135,6 +171,14 @@ export function resolveConfig(options = {}) {
     mount,
     mountSelector,
   };
+}
+
+/** Hub origin for Detective / Hub links: live window config, then init snapshot. */
+export function resolveHubBase(options = {}) {
+  const live = resolveConfig(options).hubBaseUrl;
+  if (live) return live;
+  const snap = options.config && options.config.hubBaseUrl;
+  return snap ? normalizeHubBase(snap) : "";
 }
 
 export function publicConfig(config) {

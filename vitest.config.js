@@ -13,6 +13,7 @@ export default defineConfig({
   define: {
     __ZEUS_API_URL__: JSON.stringify(""),
     __ZEUS_AUTH_TOKEN__: JSON.stringify(""),
+    __HUB_BASE_URL__: JSON.stringify(""),
     __WIDGET_VERSION__: JSON.stringify("0.1.0-test"),
   },
 });

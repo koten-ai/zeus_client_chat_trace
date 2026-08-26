@@ -258,7 +258,7 @@ export function createTracePanel(root) {
 
   function openExternal(url) {
     if (!url) {
-      toast("Set hub_url on the Zeus connection to open Detective", "warning");
+      toast("Set ZeusTraceConfig.hubBaseUrl to open Detective", "warning");
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
@@ -1494,7 +1494,7 @@ export function createTracePanel(root) {
       return;
     }
     if (action === "hub-missing") {
-      toast("Set hub_url on the Zeus connection to open Detective", "warning");
+      toast("Set ZeusTraceConfig.hubBaseUrl to open Detective", "warning");
       return;
     }
     if (action === "copy-pack" && vm) {
@@ -1521,11 +1521,11 @@ export function createTracePanel(root) {
     }
     if (action === "hub-session" && !hubBase()) {
       e.preventDefault();
-      toast("Set hub_url on the Zeus connection to open Detective", "warning");
+      toast("Set ZeusTraceConfig.hubBaseUrl to open Detective", "warning");
     }
     if (action === "hub-req" && !hubBase()) {
       e.preventDefault();
-      toast("Set hub_url on the Zeus connection to open Detective", "warning");
+      toast("Set ZeusTraceConfig.hubBaseUrl to open Detective", "warning");
     }
   }
 
@@ -1585,7 +1585,7 @@ export function createTracePanel(root) {
       if (!url) {
         const id = rid || vm.session_id || "";
         if (id) copyText(id);
-        toast("Set hub_url on the Zeus connection to open Detective", "warning");
+        toast("Set ZeusTraceConfig.hubBaseUrl to open Detective", "warning");
         return;
       }
       openExternal(url);

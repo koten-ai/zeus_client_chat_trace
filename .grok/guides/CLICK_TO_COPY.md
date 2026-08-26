@@ -74,3 +74,4 @@
 | 2026-08-25 | Grok | Sync execCommand + delegated data-copy/data-copy-from; in-panel toast |
 | 2026-08-25 | Grok | Published **1.0.1** to Spaces CDN (versioned + `latest`) |
 | 2026-08-25 | Grok | Version **1.1.0** (package + CDN versioned path and `latest`) |
+| 2026-08-26 | Grok | Version **1.1.1** (Hub-redirect config fix on CDN versioned path and `latest`) |

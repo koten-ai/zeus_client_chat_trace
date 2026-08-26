@@ -28,7 +28,7 @@
 - **Prerequisites**: Node.js 18+, npm
 - **Environment variables**:
   - `PORT` — optional; static server port (default `5199`)
-  - `ZEUS_API_URL` / `ZEUS_AUTH_TOKEN` — optional build-time widget defaults (playground still hard-codes local URLs in `ZeusTraceConfig`)
+  - `ZEUS_API_URL` / `ZEUS_AUTH_TOKEN` / `HUB_BASE_URL` — optional build-time widget defaults (playground still sets local URLs in `ZeusTraceConfig`; Detective/Hub clicks honor that config)
 - **Install / bootstrap steps**:
   1. `npm install`
   2. `npm start`

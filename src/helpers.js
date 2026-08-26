@@ -2,6 +2,11 @@
  * Shared Turn-trace helpers (ported from zeus_client/static/trace_helpers.js).
  */
 import { loadJsnview } from "./jsnview-loader.js";
+import {
+  normalizeHubBase,
+  hubDebugReqUrl,
+  hubDebugSessionUrl,
+} from "./config.js";
 
 
   function escapeHtml(s) {
@@ -1132,33 +1137,6 @@ import { loadJsnview } from "./jsnview-loader.js";
       outRow +
       "</div>"
     );
-  }
-
-  /**
-   * Workbench is stored as `{origin}/hub/#/workbench`. Detective SPA lives at
-   * `{origin}/hub/#/debug/req/{req_id}` — strip any hash + trailing /hub, then
-   * rebuild the Debug hash route. Never append under /#/workbench.
-   */
-  function normalizeHubBase(raw) {
-    let s = String(raw || "").trim();
-    if (!s) return "";
-    const hash = s.indexOf("#");
-    if (hash >= 0) s = s.slice(0, hash);
-    s = s.replace(/\/+$/, "");
-    s = s.replace(/\/hub$/i, "");
-    return s.replace(/\/+$/, "");
-  }
-
-  function hubDebugReqUrl(base, rid) {
-    const origin = normalizeHubBase(base);
-    if (!origin || !rid) return "";
-    return origin + "/hub/#/debug/req/" + encodeURIComponent(String(rid));
-  }
-
-  function hubDebugSessionUrl(base, sid) {
-  const origin = normalizeHubBase(base);
-  if (!origin || !sid) return "";
-  return origin + "/hub/debug/session/" + encodeURIComponent(String(sid));
   }
 
   function extractGather(t, entry) {

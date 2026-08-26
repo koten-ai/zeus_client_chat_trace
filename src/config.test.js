@@ -2,11 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   detectiveUrl,
   getWidgetVersion,
+  hubDebugReqUrl,
+  hubDebugSessionUrl,
+  normalizeHubBase,
   parseBoolFlag,
   publicConfig,
   readDebugQueryParam,
   resolveConfig,
   resolveEnabled,
+  resolveHubBase,
   setLoadingScript,
   zeusFetch,
 } from "./config.js";
@@ -121,6 +125,11 @@ describe("resolveConfig", () => {
     expect(resolveConfig({ search: "" }).hubBaseUrl).toBe("http://hub");
   });
 
+  it("accepts hub_url as an alias for hubBaseUrl", () => {
+    window.ZeusTraceConfig = { hub_url: "http://127.0.0.1:9091/" };
+    expect(resolveConfig({ search: "" }).hubBaseUrl).toBe("http://127.0.0.1:9091");
+  });
+
   it("falls back to script dataset attributes", () => {
     setLoadingScript({
       dataset: {
@@ -200,6 +209,41 @@ describe("resolveConfig", () => {
   });
 });
 
+describe("normalizeHubBase", () => {
+  it("keeps hostname http://hub (not a /hub path)", () => {
+    expect(normalizeHubBase("http://hub")).toBe("http://hub");
+    expect(normalizeHubBase("http://hub/")).toBe("http://hub");
+  });
+
+  it("strips workbench hash and /hub path to origin", () => {
+    expect(normalizeHubBase("http://zeus-dev.local:9091/hub/#/workbench")).toBe(
+      "http://zeus-dev.local:9091"
+    );
+    expect(normalizeHubBase("http://127.0.0.1:9091/hub")).toBe("http://127.0.0.1:9091");
+  });
+
+  it("leaves a bare origin unchanged", () => {
+    expect(normalizeHubBase("http://127.0.0.1:9091")).toBe("http://127.0.0.1:9091");
+  });
+});
+
+describe("hub debug URLs", () => {
+  it("builds session and req URLs from the given base", () => {
+    expect(hubDebugSessionUrl("http://hub", "sess-abc")).toBe(
+      "http://hub/hub/debug/session/sess-abc"
+    );
+    expect(hubDebugReqUrl("http://configured.example:9091", "req-1")).toBe(
+      "http://configured.example:9091/hub/#/debug/req/req-1"
+    );
+  });
+
+  it("rebuilds Detective req URL from a workbench base", () => {
+    expect(
+      hubDebugReqUrl("http://zeus-dev.local:9091/hub/#/workbench", "abc")
+    ).toBe("http://zeus-dev.local:9091/hub/#/debug/req/abc");
+  });
+});
+
 describe("detectiveUrl", () => {
   it("builds hub detective session path", () => {
     expect(detectiveUrl("http://hub", "sess-abc")).toBe(
@@ -221,6 +265,21 @@ describe("detectiveUrl", () => {
   it("URL-encodes session ids", () => {
     expect(detectiveUrl("http://hub", "a/b c")).toBe(
       `http://hub/hub/debug/session/${encodeURIComponent("a/b c")}`
+    );
+  });
+});
+
+describe("resolveHubBase", () => {
+  it("prefers live ZeusTraceConfig over the init snapshot", () => {
+    window.ZeusTraceConfig = { hubBaseUrl: "http://live-hub:9091" };
+    expect(resolveHubBase({ config: { hubBaseUrl: "http://stale" } })).toBe(
+      "http://live-hub:9091"
+    );
+  });
+
+  it("falls back to the init snapshot when window config has no hub", () => {
+    expect(resolveHubBase({ config: { hubBaseUrl: "http://from-init/" } })).toBe(
+      "http://from-init"
     );
   });
 });

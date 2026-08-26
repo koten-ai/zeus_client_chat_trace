@@ -1,4 +1,4 @@
-import { getWidgetVersion, parseToolOrder, zeusFetch } from "./config.js";
+import { getWidgetVersion, parseToolOrder, resolveHubBase, zeusFetch } from "./config.js";
 import { createTracePanel } from "./panel.js";
 
 export function initZeusTrace(root, config = {}) {
@@ -11,7 +11,7 @@ export function initZeusTrace(root, config = {}) {
   const panel = createTracePanel(root);
   panel.init({
     getClientVersion: () => getWidgetVersion(),
-    getHubBase: () => config.hubBaseUrl || "",
+    getHubBase: () => resolveHubBase({ config }),
     getChatId: () => chatId,
     getChartOrder: () => CHART_ORDER,
     showToast,

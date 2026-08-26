@@ -1,6 +1,6 @@
 # zeus_client_chat_trace
 
-Embeddable Zeus Tracer **v1.1.0**. Drop a single script tag into any host page to surface a floating (or docked) inspector aligned with the `zeus_client` Turn traces panel and `kotenai-zeus-client` **2.3.0** debug data (`TurnResult.debug` / `public_trace` / detective / hops).
+Embeddable Zeus Tracer **v1.1.1**. Drop a single script tag into any host page to surface a floating (or docked) inspector aligned with the `zeus_client` Turn traces panel and `kotenai-zeus-client` **2.3.0** debug data (`TurnResult.debug` / `public_trace` / detective / hops).
 
 ## What it does
 
@@ -177,6 +177,7 @@ cp .env.example .env
 |----------|-------------|
 | `ZEUS_API_URL` | Default Zeus API base URL (e.g. `http://localhost:8080`) |
 | `ZEUS_AUTH_TOKEN` | Default Bearer token for Zeus API requests |
+| `HUB_BASE_URL` | Default Hub / Detective origin (e.g. `http://127.0.0.1:9091`). Leave empty for CDN builds. |
 
 Runtime config always overrides these build-time values.
 
@@ -215,7 +216,7 @@ Config resolution order:
 | Field | Resolution |
 |-------|------------|
 | `zeusApiUrl`, `zeusAuthToken`, `toolOrder`, `enabled` | `window.ZeusTraceConfig` → script `data-*` → build-time `.env` defaults (where applicable) |
-| **`hubBaseUrl`** | `window.ZeusTraceConfig.hubBaseUrl` → script `data-hub-base-url` → `""` (**runtime only** — not in `.env`) |
+| **`hubBaseUrl`** | `window.ZeusTraceConfig.hubBaseUrl` (or `hub_url`) → script `data-hub-base-url` → `.env` `HUB_BASE_URL` → `""` |
 | `mount`, `mountSelector` | `overlay` (default floating panel) or `docked` plus a CSS selector for the host slot |
 
 **Visibility:** without `enabled: true` / `data-enabled="true"`, open the host page with `?debug=true` (e.g. `https://app.example/?debug=true`) or the panel will not mount.
@@ -224,13 +225,14 @@ Config resolution order:
 
 `hubBaseUrl` is the **Zeus Hub / Detective origin**. It is often **not** the same host as the public Zeus API (`zeusApiUrl`). Local Hub admin commonly listens on port **`:9091`**.
 
-When `hubBaseUrl` and a `session_id` are both set, the panel keeps the title **Zeus Tracer** and shows **Detective ↗**, which opens:
+When `hubBaseUrl` is set, Detective / Hub controls open that origin (never a hardcoded host):
 
 ```text
-{hubBaseUrl}/hub/debug/session/{session_id}
+Detective ↗ / Open in Hub / preferred req  →  {hubBaseUrl}/hub/#/debug/req/{req_id}
+Hub session ↗ / session                    →  {hubBaseUrl}/hub/debug/session/{session_id}
 ```
 
-When `hubBaseUrl` is unset/empty, the Detective control stays hidden (no broken link).
+Hostname `http://hub` is a valid origin (it is not treated as a `/hub` path). When `hubBaseUrl` is unset/empty, those controls do not open a tab (toast: set `ZeusTraceConfig.hubBaseUrl`).
 
 #### How to set or change it
 
@@ -255,9 +257,9 @@ When `hubBaseUrl` is unset/empty, the Detective control stays hidden (no broken 
 
    (`data-hub-base-url` → `dataset.hubBaseUrl`. Trailing slashes are stripped.)
 
-3. **Not supported in this package’s `.env`:** There is no `HUB_BASE_URL` / `ZEUS_HUB_*` build-time variable. Changing Hub for an embedded host means updating the host’s runtime config (or rebuild the host if it bakes the value in, e.g. Vite `VITE_HUB_BASE_URL` in demo apps).
+3. **Optional `.env` `HUB_BASE_URL`:** used only when runtime config and `data-hub-base-url` are empty. Prefer runtime config for hosts; leave `HUB_BASE_URL` empty when publishing the CDN bundle.
 
-4. **After the widget is already loaded:** Config is resolved once at bootstrap. Reload the page after changing `ZeusTraceConfig` / `data-hub-base-url`. Confirm with:
+4. **After the widget is already loaded:** Detective / Hub clicks re-read `window.ZeusTraceConfig.hubBaseUrl` (or `hub_url`). Confirm with:
 
    ```js
    (await window.ZeusTrace.ready).config.hubBaseUrl

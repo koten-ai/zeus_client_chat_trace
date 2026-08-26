@@ -74,6 +74,7 @@ Prefer the **versioned** URL in production embeds (immutable cache). Use `latest
 **Environment variables** (build-time defaults, optional):
 - `ZEUS_API_URL` — default Zeus API base URL
 - `ZEUS_AUTH_TOKEN` — default Bearer token
+- `HUB_BASE_URL` — default Hub / Detective origin (runtime `ZeusTraceConfig.hubBaseUrl` still wins)
 
 Copy `.env.example` to `.env` for local builds.
 
@@ -96,15 +97,16 @@ Copy `.env.example` to `.env` for local builds.
 
 Or via script data attributes: `data-zeus-api-url`, `data-zeus-auth-token`, `data-hub-base-url`, `data-enabled`.
 
-**Hub base URL (`hubBaseUrl`)** — host-supplied only (not derived from `zeusApiUrl`, **not** in this package’s `.env`):
+**Hub base URL (`hubBaseUrl`)** — not derived from `zeusApiUrl`. Every Detective / Hub redirect uses this origin:
 
 | How | Example |
 |-----|---------|
-| `window.ZeusTraceConfig.hubBaseUrl` (before script load) | `"http://127.0.0.1:9091"` |
+| `window.ZeusTraceConfig.hubBaseUrl` (or `hub_url`) | `"http://127.0.0.1:9091"` |
 | Script `data-hub-base-url` | `data-hub-base-url="http://zeus-dev.local:9091"` |
+| `.env` `HUB_BASE_URL` (build-time fallback) | `HUB_BASE_URL=http://127.0.0.1:9091` |
 | Host build env (e.g. demo_yelp) | `VITE_HUB_BASE_URL=…` → host injects `ZeusTraceConfig` |
 
-Resolution: config → `data-hub-base-url` → `""`. Empty → Detective link hidden. Link target: `{hubBaseUrl}/hub/debug/session/{session_id}`. Config is read once at bootstrap — reload after changing. Verify: `window.ZeusTrace.config.hubBaseUrl`. Full steps: `README.md` § Hub base URL.
+Resolution: window config → `data-hub-base-url` → `HUB_BASE_URL` → `""`. Empty → no tab opened. Session links: `{hubBaseUrl}/hub/debug/session/{session_id}`. Req / Detective ↗ / Open in Hub: `{hubBaseUrl}/hub/#/debug/req/{req_id}`. Clicks re-read live `ZeusTraceConfig`. Hostname `http://hub` is kept (not stripped as a `/hub` path). Verify: `window.ZeusTrace.config.hubBaseUrl`. Full steps: `README.md` § Hub base URL.
 
 ## 4. How to Use
 
@@ -179,6 +181,8 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 | Hops `Bytes` is `—` | 2.3.0 hop omitted `bytes` and had no `result_json`/`snippet`/step bytes | Widget estimates from body when present; `result_size` is rows, not bytes |
 | Panel not visible (host present) | Starts with `is-hidden` | Click toggle or `openDebugPanel()` |
 | Detective link hidden | Missing `hubBaseUrl` or `session_id` | Set `ZeusTraceConfig.hubBaseUrl`; ensure host forwards `session_id` |
+| Detective opens `http:/hub/...` | Hostname `http://hub` was treated as a `/hub` path | Rebuild; `normalizeHubBase` keeps hostname `hub` |
+| Detective still uses a stale origin | Expected config to apply only at bootstrap | Clicks re-read `ZeusTraceConfig.hubBaseUrl`; set it then click again |
 | Detective still hits `/hub/debug/req/...` | Stale vendored bundle | Rebuild + sync `zeus_client_chat_trace.js` to host static |
 | No Tool calls / AI rounds dumps | Stale bundle with broken jsnview URL (`index.umd.js` 404) hanging dump attach | Rebuild/redeploy `dist/zeus_client_chat_trace.js` (uses `index.min.js`; dumps attach before jsnview) |
 | Hash Traces empty | `trace.steps` and `trace.tool_calls` both empty | Confirm host forwards full search `trace` payload |
@@ -214,6 +218,8 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-08-26 | Grok | Detective / Hub redirects use live `hubBaseUrl` from config; `http://hub` hostname no longer mangled; optional `.env` `HUB_BASE_URL` |
+| 2026-08-26 | Grok | Package / CDN version **1.1.1** (versioned + `latest`) |
 | 2026-08-25 | Grok | Hops `Bytes` column: aliases + matching step + payload estimate (2.3.0 hops omit `bytes`) |
 | 2026-08-25 | Grok | Raw tab JSON viewer font matches inspector `--tt-mono` 11px |
 | 2026-08-25 | Grok | Pin 1.0.0 into `demo_travel_sample` (vendored `/static/…?v=1.0.0`, not CDN latest) |

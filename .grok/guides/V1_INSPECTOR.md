@@ -1,6 +1,6 @@
 # Guide: Zeus Tracer v1 Inspector
 
-**Date**: 2026-08-21
+**Date**: 2026-08-26
 **Feature**: Redesign the embeddable tracer as a v1.0.0 inspector aligned with `zeus_client` Turn traces and `kotenai-zeus-client` 2.3.0
 **Status**: Active
 **Related Plan**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md`; hops Bytes: `.grok/plans/HOPS_BYTES_DISPLAY.md`; copy: `.grok/plans/CLICK_TO_COPY.md`
@@ -24,7 +24,7 @@
 
 ## 3. Setup
 - **Prerequisites**: Node.js 18+, npm
-- **Environment variables**: `ZEUS_API_URL`, `ZEUS_AUTH_TOKEN` (build-time defaults, optional)
+- **Environment variables**: `ZEUS_API_URL`, `ZEUS_AUTH_TOKEN`, `HUB_BASE_URL` (build-time defaults, optional)
 - **Install / bootstrap steps**:
   1. `npm install && npm run build`
   2. `npm start` → http://localhost:5199/ (local playground; `?mount=overlay` for floating chrome)

@@ -52,6 +52,7 @@ describe("initZeusTrace", () => {
 
   afterEach(() => {
     root?.remove();
+    delete window.ZeusTraceConfig;
     vi.restoreAllMocks();
   });
 
@@ -271,5 +272,102 @@ describe("initZeusTrace", () => {
     });
     expect(root.querySelector(".tt-title").textContent).toMatch(/Job traces|Zeus Tracer/);
     expect(root.querySelector(".tt-turn-item").textContent).toMatch(/u1|plan trip/);
+  });
+
+  it("Detective and Hub session links use hubBaseUrl from config", () => {
+    const hub = "http://configured.example:9091";
+    const api = initZeusTrace(root, { zeusApiUrl: "", hubBaseUrl: hub });
+    api.appendTraceCard(
+      "q",
+      makeTraceFixture({
+        session_id: "sess-cfg",
+        preferred_req_id: "req-cfg",
+        trace: {
+          preferred_req_id: "req-cfg",
+          hops: [{ req_id: "req-cfg", verb: "search", status: 200, preferred: true }],
+        },
+      })
+    );
+
+    const sessionLink = root.querySelector("#tt-session a.tt-link");
+    expect(sessionLink).not.toBeNull();
+    expect(sessionLink.getAttribute("href")).toBe(`${hub}/hub/debug/session/sess-cfg`);
+
+    root.querySelector("#tt-detective").click();
+    expect(window.open).toHaveBeenCalledWith(
+      `${hub}/hub/#/debug/req/req-cfg`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  });
+
+  it("Open in Hub and Detective tab links use hubBaseUrl from config", () => {
+    const hub = "http://from-config.local:9091";
+    const api = initZeusTrace(root, { zeusApiUrl: "", hubBaseUrl: hub });
+    api.appendTraceCard(
+      "q",
+      makeTraceFixture({
+        session_id: "sess-tab",
+        preferred_req_id: "req-tab",
+        trace: {
+          preferred_req_id: "req-tab",
+          hops: [{ req_id: "req-tab", verb: "search", status: 200, preferred: true }],
+        },
+      })
+    );
+
+    root.querySelector('[data-tab="hops"]').click();
+    root.querySelector('[data-action="open-req"]').click();
+    expect(window.open).toHaveBeenCalledWith(
+      `${hub}/hub/#/debug/req/req-tab`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    root.querySelector('[data-tab="detective"]').click();
+    const session = root.querySelector('[data-action="hub-session"]');
+    const req = root.querySelector('[data-action="hub-req"]');
+    expect(session.getAttribute("href")).toBe(`${hub}/hub/debug/session/sess-tab`);
+    expect(req.getAttribute("href")).toBe(`${hub}/hub/#/debug/req/req-tab`);
+  });
+
+  it("Detective uses live ZeusTraceConfig.hubBaseUrl over the init snapshot", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", hubBaseUrl: "http://stale.example" });
+    api.appendTraceCard(
+      "q",
+      makeTraceFixture({
+        session_id: "sess-live",
+        preferred_req_id: "req-live",
+        trace: {
+          preferred_req_id: "req-live",
+          hops: [{ req_id: "req-live", verb: "search", status: 200, preferred: true }],
+        },
+      })
+    );
+    window.ZeusTraceConfig = { hubBaseUrl: "http://live.example:9091" };
+    root.querySelector("#tt-detective").click();
+    expect(window.open).toHaveBeenCalledWith(
+      "http://live.example:9091/hub/#/debug/req/req-live",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  });
+
+  it("does not open a tab when hubBaseUrl is unset", () => {
+    const api = initZeusTrace(root, { zeusApiUrl: "", hubBaseUrl: "" });
+    api.appendTraceCard(
+      "q",
+      makeTraceFixture({
+        session_id: "sess-none",
+        preferred_req_id: "req-none",
+        trace: {
+          preferred_req_id: "req-none",
+          hops: [{ req_id: "req-none", verb: "search", status: 200, preferred: true }],
+        },
+      })
+    );
+    expect(root.querySelector("#tt-session a.tt-link")).toBeNull();
+    root.querySelector("#tt-detective").click();
+    expect(window.open).not.toHaveBeenCalled();
   });
 });
