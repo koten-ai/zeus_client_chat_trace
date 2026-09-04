@@ -115,8 +115,8 @@ describe("click-to-copy", () => {
 
   it("copies hop req_id and hop JSON from the rendered pre", async () => {
     mount();
-    root.querySelector('[data-tab="hops"]').click();
-    root.querySelector("#tt-panel-hops [data-copy]").click();
+    root.querySelector('[data-tab="tools"]').click();
+    root.querySelector("#tt-panel-tools [data-copy]").click();
     await copied("req-pref-1");
     writeText.mockClear();
 
@@ -130,7 +130,7 @@ describe("click-to-copy", () => {
 
   it("copies LLM I/O, decomp, inject, raw JSON, and Copy all", async () => {
     mount();
-    root.querySelector('[data-tab="llm"]').click();
+    root.querySelector('[data-tab="tools"]').click();
     expect(root.querySelector("#tt-decomp-copy")).not.toBeNull();
     root.querySelector("#tt-decomp-copy").click();
     await copied((t) => t.includes("query_decomposition") && t.includes("count"));
@@ -144,7 +144,7 @@ describe("click-to-copy", () => {
     await copied((t) => t.includes("finish_reason"));
     writeText.mockClear();
 
-    root.querySelector('[data-tab="inject"]').click();
+    root.querySelector('[data-tab="prompt"]').click();
     root.querySelector("#tt-inj-copy-req").click();
     await copied((t) => t.includes("catalog") && t.includes("has_mini_schema"));
     writeText.mockClear();

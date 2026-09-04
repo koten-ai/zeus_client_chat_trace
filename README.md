@@ -1,6 +1,6 @@
 # zeus_client_chat_trace
 
-Embeddable Zeus Tracer **v1.1.1**. Drop a single script tag into any host page to surface a floating (or docked) inspector aligned with the `zeus_client` Turn traces panel and `kotenai-zeus-client` **2.3.0** debug data (`TurnResult.debug` / `public_trace` / detective / hops).
+Embeddable Zeus Tracer **v1.2.2**. Drop a single script tag into any host page to surface a floating (or docked) inspector aligned with the `zeus_client` Turn traces panel and `kotenai-zeus-client` **2.3.0** debug data (`TurnResult.debug` / `public_trace` / detective / hops).
 
 ## What it does
 
@@ -15,7 +15,8 @@ When a host application calls the Zeus search API, the response includes a `trac
 - **Performance metrics** — Wall / AI / Zeus bar, token in/out/total (+ cached), synthesized spans when `public_trace` omits them.
 - **Waterfall + Story** — Timeline waterfall with pipeline expansion; optional Story spine.
 - **Job / units rail** — When `trace.multi_agent` is set, the list becomes units (Mode 3 UI only).
-- **JSON dumps** — Raw tab uses [jsnview](https://www.npmjs.com/package/jsnview) (lazy CDN) with a plain-text fallback. **No DaisyUI CDN.**
+- **JSON dumps** — Raw tab uses [jsnview](https://www.npmjs.com/package/jsnview) (lazy CDN) with a plain-text fallback.
+- **DaisyUI in Shadow DOM** — v1.2 theming uses DaisyUI inside the shadow root. The diagnosis strip keeps `alert`/`alert-warning` colors but is forced to a compact column so DaisyUI’s sm+ alert grid cannot fill the panel.
 - **Early-call queue** — Calls to `appendTraceCard` or `openDebugPanel` made before the script finishes loading are buffered and replayed automatically.
 - **Copy all** — Export the current trace session to the clipboard as JSON.
 - **Click to copy** — Session / job / turn / req IDs and hop/LLM/inject/raw Copy buttons write the clipboard (Shadow DOM safe).
@@ -66,7 +67,7 @@ sequenceDiagram
 1. The host page optionally sets `window.ZeusTraceConfig` (or `data-*` attributes on the script tag).
 2. The async bundle loads. Before mount completes, `appendTraceCard` and `openDebugPanel` are stubbed to push into an **early-call queue** so nothing is lost.
 3. On `DOMContentLoaded`, `bootstrap.js` resolves config and the **enabled kill switch** (see below). If disabled, it installs no-op APIs, skips DOM, and resolves `ZeusTrace.ready` immediately.
-4. When enabled, it creates `#zeus-trace-host` (or a docked `mountSelector`), attaches an open Shadow DOM, injects widget markup/styles (no DaisyUI), calls `initZeusTrace`, installs globals, and drains the early-call queue. `ZeusTrace.ready` resolves at this point.
+4. When enabled, it creates `#zeus-trace-host` (or a docked `mountSelector`), attaches an open Shadow DOM, injects widget markup/styles plus DaisyUI, calls `initZeusTrace`, installs globals, and drains the early-call queue. `ZeusTrace.ready` resolves at this point.
 5. Config is resolved (`ZeusTraceConfig` → script `data-*` → build-time `.env` defaults). If `toolOrder` is injected it is used immediately; otherwise, when `zeusApiUrl` is set, the widget **best-effort** fetches `/api/tool-order` (3s timeout) in the background to order tool-frequency bars. This fetch never blocks the widget or `appendTraceCard`.
 6. Host calls continue to work even if tool-order is slow, fails, or hangs (and are silent no-ops when the widget is disabled).
 
