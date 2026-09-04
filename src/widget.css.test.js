@@ -77,7 +77,7 @@ describe("widget.css", () => {
     expect(getComputedStyle(session).display).toBe("none");
     expect(getComputedStyle(grid).display).toBe("none");
     grid.hidden = false;
-    expect(getComputedStyle(grid).display).toBe("grid");
+    expect(getComputedStyle(grid).display).toBe("flex");
     body.remove();
     style.remove();
   });
@@ -87,6 +87,14 @@ describe("widget.css", () => {
     expect(dump).toMatch(/\.trace-dump-viewer[\s\S]{0,500}font-family:\s*var\(--tt-mono/);
     expect(dump).toMatch(/\.trace-dump-viewer \.jsv[\s\S]{0,400}--tt-mono/);
     expect(dump).toMatch(/\.trace-dump-viewer[\s\S]{0,500}font-size:\s*11px/);
+  });
+
+  it("keeps DaisyUI .alert diagnosis as a compact column, not a stretched grid", () => {
+    const dump = stripComments(css);
+    expect(dump).toMatch(/\.tt-diagnosis\.alert[\s\S]{0,400}display:\s*flex\s*!important/);
+    expect(dump).toMatch(/\.tt-diagnosis\.alert[\s\S]{0,400}flex-direction:\s*column\s*!important/);
+    expect(dump).toMatch(/\.tt-diagnosis-body[\s\S]{0,200}flex-direction:\s*column/);
+    expect(dump).toMatch(/\.tt-diagnosis[\s\S]{0,200}max-height:\s*min\(28vh,\s*220px\)/);
   });
 
   it("declares .tt-panel at the top level", () => {
