@@ -1,5 +1,5 @@
 /**
- * Turn traces inspector panel (sketches hybrid: 001 shell + 003 strip + 002 Story).
+ * Turn traces inspector panel (DaisyUI Detective IA).
  * Ported from zeus_client/static/trace_panel.js — queries scoped to a root
  * (Shadow DOM overlay or docked host).
  */
@@ -22,12 +22,9 @@ export function createTracePanel(root) {
 
   let entries = []; // raw entry objects newest last
   let selectedKey = null;
-  let filter = "all";
-  let search = "";
-  let tab = "timeline";
+  let tab = "overview";
   let hopSel = 0;
   let llmRound = 0;
-  let storyMode = false;
   let lastAutoTabKey = null;
   let inited = false;
   let jobMode = false;
@@ -39,6 +36,92 @@ export function createTracePanel(root) {
 
   function esc(s) {
     return (H().escapeHtml || ((x) => String(x)))(s);
+  }
+
+  const ICON_PATHS = {
+    external:
+      "M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25",
+    star: "M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z",
+    check: "M4.5 12.75 9 17.25 19.5 6.75",
+    clipboard:
+      "M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184",
+  };
+
+  function iconSvg(name, box) {
+    const d = ICON_PATHS[name];
+    if (!d) return "";
+    return (
+      '<span class="inline-block ' +
+      (box || "w-4 h-4") +
+      ' shrink-0" aria-hidden="true">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" d="' +
+      d +
+      '" /></svg></span>'
+    );
+  }
+
+  function badgeFor(st) {
+    const s = String(st || "").toLowerCase();
+    let tone = "badge-ghost";
+    if (s === "ok" || s === "pass") tone = "badge-success";
+    else if (s === "warn") tone = "badge-warning";
+    else if (s === "err" || s === "fail" || s === "error" || s === "bad") tone = "badge-error";
+    else if (s === "info") tone = "badge-info";
+    return "badge badge-sm " + tone;
+  }
+
+  function copyChip(value, n) {
+    if (!value) return "";
+    return (
+      '<button type="button" class="btn btn-ghost btn-xs font-mono tt-id" data-copy="' +
+      esc(value) +
+      '" title="Click to copy">' +
+      esc(shortId(value, n || 14)) +
+      "</button>"
+    );
+  }
+
+  function copyValueRow(value) {
+    if (!value) return "";
+    const full = esc(value);
+    return (
+      '<span class="tt-copy-id inline-flex items-center gap-1 whitespace-nowrap">' +
+      '<span class="tt-copy-id-val">' +
+      full +
+      "</span>" +
+      '<button type="button" class="btn btn-ghost btn-xs btn-square shrink-0 min-h-0 h-5 w-5 p-0" data-copy="' +
+      full +
+      '" title="Copy ' +
+      full +
+      '" aria-label="Copy ' +
+      full +
+      '">' +
+      iconSvg("clipboard", "w-3.5 h-3.5") +
+      "</button>" +
+      "</span>"
+    );
+  }
+
+  function isCopyableIdKey(key) {
+    return [
+      "req_id",
+      "session_id",
+      "chat_id",
+      "turn_id",
+      "call_id",
+      "job_id",
+      "preferred_req_id",
+    ].includes(String(key || ""));
+  }
+
+  function valueCell(key, value) {
+    if (isCopyableIdKey(key) && value) return copyValueRow(value);
+    return esc(value);
+  }
+
+  function sepDot() {
+    return '<span class="tt-sep" aria-hidden="true">·</span>';
   }
 
   function fmtMs(ms) {
@@ -110,7 +193,7 @@ export function createTracePanel(root) {
       (ok) => {
         if (ok) {
           markCopied(sourceEl);
-          toast("✓ copied " + shortId(s, 28));
+          toast("copied " + shortId(s, 28));
         } else {
           toast("Copy failed", "error");
         }
@@ -143,25 +226,18 @@ export function createTracePanel(root) {
 
   function applyJobChrome(on) {
     const title = root.querySelector(".tt-title");
-    if (title) title.textContent = on ? "Job traces" : "Zeus Tracer";
-    const search = el("tt-search");
-    if (search) search.placeholder = on ? "Filter unit, req_id…" : "Filter turns, tools, req_id…";
+    if (title) title.textContent = on ? "Job traces" : "Turn traces";
     const empty = el("tt-empty");
     if (empty && !entries.length) empty.textContent = on ? "No job run yet." : "No turn run yet.";
-    const nav = root.querySelector(".tt-turn-list");
-    if (nav) nav.setAttribute("aria-label", on ? "Units" : "Turns");
+    const label = el("tt-turn-picker-label");
+    if (label) label.textContent = on ? "Unit" : "Turn";
+    const list = el("tt-turns");
+    if (list) list.setAttribute("aria-label", on ? "Units" : "Turns");
     root.querySelectorAll(".tt-tab[data-job], .tt-tab[data-turn]").forEach((b) => {
       const jobOnly = b.hasAttribute("data-job") && !b.hasAttribute("data-turn");
       const turnOnly = b.hasAttribute("data-turn") && !b.hasAttribute("data-job");
       b.hidden = (jobOnly && !on) || (turnOnly && on);
     });
-    const filters = el("tt-filters");
-    if (filters) {
-      const tools = filters.querySelector('[data-filter="tools"]');
-      const agent = filters.querySelector('[data-filter="agent"]');
-      if (tools) tools.hidden = !!on;
-      if (agent) agent.hidden = !on;
-    }
     const panelEl = el("tt-panel");
     if (panelEl) panelEl.classList.toggle("tt-job-mode", !!on);
   }
@@ -177,14 +253,7 @@ export function createTracePanel(root) {
     hopSel = 0;
     llmRound = 0;
     lastAutoTabKey = null;
-    filter = "all";
-    const filters = el("tt-filters");
-    if (filters) {
-      filters.querySelectorAll(".tt-chip").forEach((c) =>
-        c.classList.toggle("on", c.dataset.filter === "all")
-      );
-    }
-    tab = jobMode ? "hops" : "timeline";
+    tab = "overview";
     applyJobChrome(jobMode);
     wireOnce();
     render();
@@ -202,24 +271,38 @@ export function createTracePanel(root) {
     return vms.find((v) => v.key === selectedKey) || vms[0];
   }
 
-  function matchesFilter(vm) {
-    if (filter === "error" && vm.status === "ok" && vm.errCount === 0) return false;
-    if (filter === "tools" && vm.toolsCount === 0) return false;
-    const q = (search || "").toLowerCase().trim();
-    if (!q) return true;
-    const hay = [
-      vm.question,
-      vm.mode,
-      vm.target,
-      String(vm.index + 1),
-      vm.turn_id,
-      vm.preferred_req_id,
-      vm.session_id,
-      ...vm.hops.map((h) => h.verb + " " + h.req_id),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
+  function closeTurnDropdown() {
+    const d = el("tt-turn-dropdown");
+    if (d) d.open = false;
+    const s = el("tt-turn-summary");
+    if (s) s.setAttribute("aria-expanded", "false");
+  }
+
+  function syncTurnTrigger(info) {
+    const n = el("tt-pick-n");
+    const q = el("tt-pick-q");
+    const meta = el("tt-pick-meta");
+    const dot = el("tt-pick-dot");
+    const err = el("tt-pick-err");
+    if (!info) {
+      if (n) n.textContent = "";
+      if (q) q.textContent = jobMode ? "Select a unit" : "Select a turn";
+      if (meta) meta.textContent = "";
+      if (dot) dot.className = "dot";
+      if (err) err.hidden = true;
+      return;
+    }
+    if (n) n.textContent = info.n || "";
+    if (q) q.textContent = info.question || "";
+    if (meta) meta.textContent = info.meta || "";
+    const status = info.status || "ok";
+    if (dot) dot.className = "dot" + (status === "ok" ? " ok" : " " + status);
+    if (err) {
+      err.hidden = !info.errLabel;
+      err.textContent = info.errLabel || "";
+      err.className =
+        "badge badge-xs shrink-0 " + (status === "err" ? "badge-error" : "badge-warning");
+    }
   }
 
   function hubBase() {
@@ -267,7 +350,10 @@ export function createTracePanel(root) {
   function setTab(name) {
     tab = name;
     root.querySelectorAll(".tt-tab").forEach((b) => {
-      b.classList.toggle("on", b.dataset.tab === name);
+      const on = b.dataset.tab === name;
+      b.classList.toggle("on", on);
+      b.classList.toggle("tab-active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
     });
     root.querySelectorAll(".tt-tab-panel").forEach((p) => {
       p.classList.toggle("on", p.id === "tt-panel-" + name);
@@ -275,30 +361,19 @@ export function createTracePanel(root) {
   }
 
   function renderHeader(count) {
+    const n = jobMode ? jobUnits().length : count;
+    const hasRequest = n > 0;
     const countEl = el("tt-turn-count");
     if (countEl) {
       if (jobMode) {
-        const n = jobUnits().length;
         countEl.textContent = n + " unit" + (n === 1 ? "" : "s");
       } else {
-        countEl.textContent = count + " turn" + (count === 1 ? "" : "s");
+        countEl.textContent = n + " turn" + (n === 1 ? "" : "s");
       }
+      countEl.hidden = !hasRequest;
     }
-    const verEl = el("tt-client-ver");
-    if (verEl) {
-      let v = "";
-      try {
-        v = opts.getClientVersion() || "";
-      } catch (e) {
-        v = "";
-      }
-      if (!v) {
-        const badge = el("client-version-badge");
-        if (badge) v = (badge.textContent || "").replace(/^client\s*v?/i, "").trim();
-      }
-      verEl.textContent = v ? "client v" + v.replace(/^v/, "") : "";
-      verEl.hidden = !v;
-    }
+    const actions = root.querySelector("#tt-panel .tt-hdr-actions");
+    if (actions) actions.hidden = !hasRequest;
   }
 
   function renderJobBar(entry, units) {
@@ -315,11 +390,7 @@ export function createTracePanel(root) {
     bar.innerHTML =
       "<span>job</span>" +
       (jobId
-        ? '<button type="button" class="tt-id" data-copy="' +
-          esc(jobId) +
-          '" title="Click to copy">' +
-          esc(jobId) +
-          "</button>"
+        ? copyChip(jobId, 40)
         : '<span class="tt-muted">—</span>') +
       '<span class="tt-sep">·</span>' +
       (pack ? "<span>pack <strong>" + esc(pack) + "</strong></span>" : '<span class="tt-muted">no pack</span>') +
@@ -368,11 +439,7 @@ export function createTracePanel(root) {
     bar.innerHTML =
       "<span>Session</span>" +
       (vm.session_id
-        ? '<button type="button" class="tt-id" data-copy="' +
-          esc(vm.session_id) +
-          '" title="Click to copy">' +
-          esc(shortId(vm.session_id, 14)) +
-          "</button>"
+        ? copyChip(vm.session_id, 14)
         : "<span class=\"tt-muted\">—</span>") +
       '<span class="tt-sep">·</span>' +
       (vm.session_round != null
@@ -387,17 +454,13 @@ export function createTracePanel(root) {
         : "") +
       (vm.preferred_req_id
         ? '<span class="tt-sep">·</span><span>preferred</span>' +
-          '<button type="button" class="tt-id" data-copy="' +
-          esc(vm.preferred_req_id) +
-          '" title="Click to copy">' +
-          esc(shortId(vm.preferred_req_id, 14)) +
-          "</button>"
+          copyChip(vm.preferred_req_id, 14)
         : "") +
       (hub
         ? '<span class="tt-sep">·</span><a class="tt-link" href="' +
           esc(hub) +
-          '" target="_blank" rel="noopener">Hub session ↗</a>'
-        : '<span class="tt-sep">·</span><button type="button" class="tt-linkish" data-action="hub-missing">Hub session ↗</button>') +
+          '" target="_blank" rel="noopener">Hub session</a>'
+        : '<span class="tt-sep">·</span><button type="button" class="tt-linkish" data-action="hub-missing">Hub session</button>') +
       (vm.gather && vm.gather.length
         ? '<span class="tt-sep">·</span><span class="tt-badge info">gather 9</span>'
         : "") +
@@ -415,37 +478,27 @@ export function createTracePanel(root) {
         : "");
   }
 
-  function matchesUnitFilter(u) {
-    if (!u) return false;
-    if (filter === "error" && u.status === "ok") return false;
-    if (filter === "agent" && u.kind !== "agent_turn") return false;
-    const q = (search || "").toLowerCase().trim();
-    if (!q) return true;
-    const hay = [u.unit_id, u.goal, u.kind, u.answer, ...(u.req_ids || [])].join(" ").toLowerCase();
-    return hay.includes(q);
-  }
-
   function renderUnitList(units) {
     const host = el("tt-turns");
     if (!host) return;
-    const visible = units.filter(matchesUnitFilter);
     host.innerHTML = "";
-    if (!visible.length) {
-      host.innerHTML = '<div class="tt-empty-inline">No units match</div>';
+    if (!units.length) {
+      host.innerHTML = '<div class="tt-empty-inline">No units</div>';
+      syncTurnTrigger(null);
       return;
     }
-    visible.forEach((u) => {
-      const i = units.indexOf(u);
+    units.forEach((u, i) => {
       const tags = [];
       tags.push('<span class="tt-turn-tag">' + esc(u.kind) + "</span>");
       if (u.synth) tags.push('<span class="tt-turn-tag synth">synth</span>');
       else tags.push('<span class="tt-turn-tag">isolated</span>');
       tags.push('<span class="tt-turn-tag">' + (u.req_ids || []).length + " req</span>");
       if (u.error_code) tags.push('<span class="tt-turn-tag err">' + esc(u.error_code) + "</span>");
-      const div = document.createElement("div");
+      const div = document.createElement("button");
+      div.type = "button";
       div.className = "tt-turn-item" + (i === unitSel ? " active" : "");
-      div.setAttribute("role", "button");
-      div.tabIndex = 0;
+      div.setAttribute("role", "option");
+      div.setAttribute("aria-selected", i === unitSel ? "true" : "false");
       div.innerHTML =
         '<div class="row1">' +
         '<span class="dot ' +
@@ -467,6 +520,7 @@ export function createTracePanel(root) {
         unitSel = i;
         hopSel = 0;
         llmRound = 0;
+        closeTurnDropdown();
         render();
       };
       div.onclick = select;
@@ -478,19 +532,30 @@ export function createTracePanel(root) {
       };
       host.appendChild(div);
     });
+    const u = selectedUnit(units);
+    if (u) {
+      syncTurnTrigger({
+        n: u.unit_id,
+        question: u.goal || u.answer || u.unit_id,
+        meta: "w" + String(u.wave) + " · " + (u.req_ids || []).length + " req",
+        status: u.status === "ok" ? "ok" : u.status,
+        errLabel: u.error_code || (u.status === "err" ? "err" : ""),
+      });
+    } else {
+      syncTurnTrigger(null);
+    }
   }
 
   function renderTurnList(vms) {
     const host = el("tt-turns");
     if (!host) return;
-    const visible = vms.filter(matchesFilter);
     host.innerHTML = "";
-    if (!visible.length) {
-      host.innerHTML = '<div class="tt-empty-inline">No turns match</div>';
+    if (!vms.length) {
+      host.innerHTML = '<div class="tt-empty-inline">No turns</div>';
+      syncTurnTrigger(null);
       return;
     }
-    visible.forEach((vm) => {
-      // Chronological turn number (oldest = #1), list is newest-first.
+    vms.forEach((vm) => {
       const num = vm.index + 1;
       const rounds = vm.llmRounds.length || vm.trace.rounds || 0;
       const statusCls = vm.status === "ok" ? "ok" : vm.status;
@@ -508,12 +573,13 @@ export function createTracePanel(root) {
           '<span class="tt-turn-tag err">' + vm.errCount + " err</span>"
         );
       }
-      const div = document.createElement("div");
-      div.className =
-        "tt-turn-item" + (vm.key === selectedKey ? " active" : "");
+      const active = vm.key === selectedKey;
+      const div = document.createElement("button");
+      div.type = "button";
+      div.className = "tt-turn-item" + (active ? " active" : "");
       div.dataset.key = vm.key;
-      div.setAttribute("role", "button");
-      div.tabIndex = 0;
+      div.setAttribute("role", "option");
+      div.setAttribute("aria-selected", active ? "true" : "false");
       div.innerHTML =
         '<div class="row1">' +
         '<span class="dot ' +
@@ -538,6 +604,7 @@ export function createTracePanel(root) {
         selectedKey = vm.key;
         hopSel = 0;
         llmRound = 0;
+        closeTurnDropdown();
         render();
       };
       div.onclick = select;
@@ -549,6 +616,19 @@ export function createTracePanel(root) {
       };
       host.appendChild(div);
     });
+    const sel = vms.find((v) => v.key === selectedKey) || vms[0];
+    if (sel) {
+      const rounds = sel.llmRounds.length || sel.trace.rounds || 0;
+      syncTurnTrigger({
+        n: "#" + (sel.index + 1),
+        question: sel.question,
+        meta: fmtMs(sel.metrics.total) + " · " + rounds + "r · " + sel.toolsCount + " tools",
+        status: sel.status === "ok" ? "ok" : sel.status,
+        errLabel: sel.errCount ? sel.errCount + " err" : "",
+      });
+    } else {
+      syncTurnTrigger(null);
+    }
   }
 
   function renderUnitHead(u) {
@@ -705,10 +785,10 @@ export function createTracePanel(root) {
     }
     box.hidden = false;
     box.className =
-      "tt-diagnosis" +
+      "tt-diagnosis alert mx-3 mt-2 " +
       (vm.grade === "fail" || vm.status === "err"
-        ? " fail"
-        : " warn");
+        ? "alert-error fail"
+        : "alert-warning warn");
     const grade = vm.grade || vm.status;
     box.innerHTML =
       '<div class="eyebrow">' +
@@ -755,192 +835,46 @@ export function createTracePanel(root) {
           esc(shortId(vm.preferred_req_id, 14)) +
           "</span>"
         : "") +
-      '<button type="button" class="tt-btn primary" data-action="open-pref">Open preferred hop</button>' +
-      '<button type="button" class="tt-btn" data-action="copy-pack" title="Click to copy">Copy support pack</button>' +
+      '<button type="button" class="btn btn-xs btn-primary" data-action="open-pref">Open preferred hop</button>' +
+      '<button type="button" class="btn btn-xs" data-action="copy-pack" title="Click to copy">Copy support pack</button>' +
       "</div>";
   }
 
   function renderTimeline(vm) {
     const panel = el("tt-panel-timeline");
     if (!panel || !vm) return;
-    const storyToggle =
-      '<label class="tt-story-toggle"><input type="checkbox" id="tt-story"' +
-      (storyMode ? " checked" : "") +
-      " /> Story</label>";
-    if (storyMode) {
-      panel.innerHTML =
-        '<div class="tt-tab-toolbar">' +
-        storyToggle +
-        "</div>" +
-        storyHTML(vm);
-      bindStoryToggle(vm);
-      return;
-    }
     const wf = (H().waterfallHTML || (() => ""))(
       vm.spans,
-      vm.metrics.total,
+      vm.metrics && vm.metrics.total,
       vm.steps
     );
+    const kpis = H().timelineSpeedKpiHTML ? H().timelineSpeedKpiHTML(vm) : "";
     const chart = (H().toolFrequencyChartHTML || (() => ""))(
       vm.steps,
       vm.api_version,
       opts.getChartOrder()
     );
     panel.innerHTML =
-      '<div class="tt-tab-toolbar">' +
-      storyToggle +
-      "</div>" +
+      '<div class="tt-waterfall-host">' +
+      '<h2 class="text-base font-semibold m-0 mb-2">Spans waterfall</h2>' +
+      kpis +
       (wf || '<div class="tt-empty-inline">No spans for this turn.</div>') +
-      '<div class="tt-kv">' +
-      '<div class="k">Status</div><div class="v"><span class="tt-badge ' +
-      (vm.status === "ok" ? "ok" : vm.status === "err" ? "err" : "warn") +
-      '">' +
-      esc(vm.status) +
-      "</span></div>" +
-      '<div class="k">Mode / target</div><div class="v">' +
-      esc(vm.mode || "—") +
-      " · " +
-      esc(vm.target || "—") +
       "</div>" +
-      '<div class="k">API</div><div class="v">' +
-      esc(String(vm.api_version || "").toUpperCase()) +
-      " · " +
-      esc(vm.provider || "") +
-      " / " +
-      esc(vm.model || "") +
-      "</div></div>" +
       (chart
         ? '<details class="tt-fold"><summary>Tool-call frequency</summary>' +
           chart +
           "</details>"
         : "");
-    bindStoryToggle(vm);
   }
 
-  function bindStoryToggle(vm) {
-    const cb = el("tt-story");
-    if (!cb) return;
-    cb.onchange = () => {
-      storyMode = !!cb.checked;
-      renderTimeline(vm);
-    };
-  }
-
-  function storyHTML(vm) {
-    const events = [];
-    (vm.spans || []).forEach((s) => {
-      let kind = "sys";
-      if (s.cls === "ai") kind = "ai";
-      else if (s.cls === "tool") kind = "tool";
-      else kind = "sys";
-      events.push({
-        kind,
-        title: s.name,
-        t: "+" + (s.at || 0) + "ms",
-        ms: s.ms,
-        body: s.detail || null,
-      });
-    });
-    vm.hops
-      .filter((h) => (Number(h.status) || 0) >= 400)
-      .forEach((h) => {
-        events.push({
-          kind: "err",
-          title: "Hop failed · " + h.verb,
-          t: h.ms + "ms",
-          ms: h.ms,
-          autoOpen: true,
-          req: h.req,
-          res: h.res,
-          meta: "status=" + h.status + " req=" + shortId(h.req_id, 12),
-        });
-      });
-    events.push({
-      kind: "out",
-      title: "Turn result",
-      t: fmtMs(vm.metrics.total),
-      meta:
-        "status=" +
-        vm.status +
-        (vm.grade ? " · detective=" + vm.grade : ""),
-    });
-    if (!events.length)
-      return '<div class="tt-empty-inline">No story events.</div>';
-    return (
-      '<div class="tt-story-spine">' +
-      events
-        .map((ev, i) => {
-          const open = ev.autoOpen ? " open" : "";
-          const payload =
-            ev.req || ev.res
-              ? '<div class="tt-split-io"><div class="io-card"><header>Request</header><pre></pre></div><div class="io-card"><header>Response</header><pre></pre></div></div>'
-              : ev.body
-                ? "<pre class=\"story-body\"></pre>"
-                : "";
-          return (
-            '<details class="story-card kind-' +
-            esc(ev.kind) +
-            '"' +
-            open +
-            ' data-i="' +
-            i +
-            '"><summary><span class="skind">' +
-            esc(ev.kind) +
-            '</span><span class="stitle">' +
-            esc(ev.title) +
-            '</span><span class="st">' +
-            esc(ev.t || "") +
-            "</span></summary>" +
-            (ev.meta
-              ? '<div class="smeta">' + esc(ev.meta) + "</div>"
-              : "") +
-            payload +
-            "</details>"
-          );
-        })
-        .join("") +
-      "</div>"
-    );
-  }
-
-  // Fill story pre via textContent after inject
-  function hydrateStory(vm) {
-    const panel = el("tt-panel-timeline");
-    if (!panel || !storyMode) return;
-    // rebuild events same as storyHTML
-    const events = [];
-    (vm.spans || []).forEach((s) => {
-      let kind = s.cls === "ai" ? "ai" : s.cls === "tool" ? "tool" : "sys";
-      events.push({ kind, title: s.name, body: s.detail, req: null, res: null });
-    });
-    vm.hops
-      .filter((h) => (Number(h.status) || 0) >= 400)
-      .forEach((h) => {
-        events.push({ kind: "err", title: h.verb, req: h.req, res: h.res });
-      });
-    panel.querySelectorAll(".story-card").forEach((card) => {
-      const i = +card.dataset.i;
-      const ev = events[i];
-      if (!ev) return;
-      const pres = card.querySelectorAll("pre");
-      if (ev.req != null || ev.res != null) {
-        if (pres[0]) pres[0].textContent = prettyJSON(ev.req || {});
-        if (pres[1]) pres[1].textContent = prettyJSON(ev.res || {});
-      } else if (ev.body && pres[0]) {
-        pres[0].textContent = String(ev.body);
-      }
-    });
-  }
-
-  function renderHops(vm) {
-    const panel = el("tt-panel-hops");
+  function renderHops(vm, host) {
+    const panel = host || el("tt-tools-hops");
     if (!panel || !vm) return;
     if (!vm.hops.length) {
       panel.innerHTML = '<div class="tt-empty-inline">No hops recorded for this turn.</div>';
       return;
     }
     if (hopSel >= vm.hops.length) hopSel = 0;
-    // prefer preferred hop on first paint if hopSel was reset
     const hop = vm.hops[hopSel];
     const rows = vm.hops
       .map((h, i) => {
@@ -952,15 +886,27 @@ export function createTracePanel(root) {
           i +
           '">' +
           "<td>" +
-          (h.preferred ? "★ " : "") +
-          '<span class="mono">' +
+          (h.preferred
+            ? '<span class="inline-flex items-center gap-1">' +
+              iconSvg("star") +
+              '<span class="sr-only">preferred</span></span>'
+            : "") +
+          '<button type="button" class="btn btn-xs btn-ghost font-mono" data-i="' +
+          i +
+          '"' +
+          (h.req_id
+            ? ' data-copy="' +
+              esc(h.req_id) +
+              '" title="Click to copy"'
+            : "") +
+          ">" +
           esc(shortId(h.req_id || "—", 12)) +
-          "</span></td>" +
+          "</button></td>" +
           "<td><strong>" +
           esc(h.verb) +
           "</strong></td>" +
-          '<td><span class="status-pill ' +
-          (bad ? "bad" : "ok") +
+          '<td><span class="' +
+          badgeFor(bad ? "bad" : "ok") +
           '">' +
           esc(String(h.status)) +
           "</span></td>" +
@@ -980,41 +926,44 @@ export function createTracePanel(root) {
       })
       .join("");
     panel.innerHTML =
-      '<table class="tt-table"><thead><tr><th>req_id</th><th>Verb</th><th>Status</th><th>ms</th><th>Bytes</th></tr></thead><tbody>' +
+      '<div class="overflow-x-auto"><table class="table table-zebra table-xs tt-table"><thead><tr><th>req_id</th><th>Verb</th><th>Status</th><th>ms</th><th>Bytes</th></tr></thead><tbody>' +
       rows +
-      "</tbody></table>" +
-      '<div class="tt-hop-actions"><strong>Hop detail</strong>' +
+      "</tbody></table></div>" +
+      '<div class="tt-hop-actions flex gap-2 items-center my-2 text-sm"><strong>Hop detail</strong>' +
       (hop.req_id
-        ? '<button type="button" class="tt-btn ghost" data-copy="' +
+        ? '<button type="button" class="btn btn-xs btn-ghost" data-copy="' +
           esc(hop.req_id) +
           '" title="Click to copy">Copy req_id</button>'
         : "") +
-      '<button type="button" class="tt-btn ghost" data-action="open-req" data-req="' +
+      '<button type="button" class="btn btn-xs btn-ghost gap-1" data-action="open-req" data-req="' +
       esc(hop.req_id || "") +
-      '">Open in Hub ↗</button></div>' +
-      '<div class="tt-split-io">' +
-      '<div class="io-card"><header><span class="ai-lab">Request</span> <span class="tt-badge">' +
+      '">Open in Hub ' +
+      iconSvg("external") +
+      "</button></div>" +
+      '<div class="tt-split-io grid grid-cols-1 md:grid-cols-2 gap-2.5">' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold"><span class="ai-lab">Request</span> <span class="badge badge-ghost badge-sm">' +
       esc(hop.verb) +
-      '</span><button type="button" class="tt-btn ghost ml-auto" data-copy-from="tt-hop-req" title="Click to copy">Copy</button></header><pre id="tt-hop-req"></pre></div>' +
-      '<div class="io-card"><header><span class="zeus-lab">Response</span> <span class="status-pill ' +
-      ((Number(hop.status) || 0) >= 400 ? "bad" : "ok") +
+      '</span><button type="button" class="btn btn-xs btn-ghost ml-auto" data-copy-from="tt-hop-req" title="Click to copy">Copy</button></header><pre id="tt-hop-req"></pre></div>' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold"><span class="zeus-lab">Response</span> <span class="' +
+      badgeFor((Number(hop.status) || 0) >= 400 ? "bad" : "ok") +
       '">' +
       esc(String(hop.status)) +
-      '</span><button type="button" class="tt-btn ghost ml-auto" data-copy-from="tt-hop-res" title="Click to copy">Copy</button></header><pre id="tt-hop-res"></pre></div></div>';
+      '</span><button type="button" class="btn btn-xs btn-ghost ml-auto" data-copy-from="tt-hop-res" title="Click to copy">Copy</button></header><pre id="tt-hop-res"></pre></div></div>';
     const preReq = el("tt-hop-req");
     const preRes = el("tt-hop-res");
     if (preReq) preReq.textContent = prettyJSON(hop.req);
     if (preRes) preRes.textContent = prettyJSON(hop.res);
     panel.querySelectorAll("tbody tr").forEach((tr) => {
-      tr.onclick = () => {
+      tr.onclick = (ev) => {
+        if (ev.target.closest("[data-copy]")) return;
         hopSel = +tr.dataset.i;
-        renderHops(vm);
+        renderHops(vm, panel);
       };
     });
   }
 
-  function renderLlm(vm) {
-    const panel = el("tt-panel-llm");
+  function renderLlm(vm, host) {
+    const panel = host || el("tt-tools-llm");
     if (!panel || !vm) return;
     const info = H().extractDecomposition
       ? H().extractDecomposition(
@@ -1055,8 +1004,8 @@ export function createTracePanel(root) {
       vm.llmRounds
         .map(
           (x, i) =>
-            '<button type="button" class="round-pill ' +
-            (i === llmRound ? "on" : "") +
+            '<button type="button" class="btn btn-xs round-pill ' +
+            (i === llmRound ? "btn-active on" : "") +
             '" data-i="' +
             i +
             '">' +
@@ -1076,22 +1025,22 @@ export function createTracePanel(root) {
         ? " · total <strong>" + esc(String(r.tok_total)) + "</strong>"
         : "") +
       "</div>" +
-      '<div class="tt-split-io">' +
-      '<div class="io-card"><header>AI request <button type="button" class="tt-btn ghost ml-auto" id="tt-llm-copy-req" data-copy-from="tt-llm-req" title="Click to copy">Copy</button></header><pre id="tt-llm-req"></pre></div>' +
-      '<div class="io-card"><header>AI response <button type="button" class="tt-btn ghost ml-auto" id="tt-llm-copy-res" data-copy-from="tt-llm-res" title="Click to copy">Copy</button></header><pre id="tt-llm-res"></pre></div></div>';
+      '<div class="tt-split-io grid grid-cols-1 md:grid-cols-2 gap-2.5">' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold">AI request <button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-llm-copy-req" data-copy-from="tt-llm-req" title="Click to copy">Copy</button></header><pre id="tt-llm-req"></pre></div>' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold">AI response <button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-llm-copy-res" data-copy-from="tt-llm-res" title="Click to copy">Copy</button></header><pre id="tt-llm-res"></pre></div></div>';
     el("tt-llm-req").textContent = prettyJSON(r.req);
     el("tt-llm-res").textContent = prettyJSON(r.res);
     panel.querySelectorAll(".round-pill").forEach((b) => {
       b.onclick = () => {
         llmRound = +b.dataset.i;
-        renderLlm(vm);
+        renderLlm(vm, panel);
       };
     });
     wireDecompCopy();
   }
 
-  function renderTurnInject(vm) {
-    const panel = el("tt-panel-inject");
+  function renderTurnInject(vm, host) {
+    const panel = host || el("tt-prompt-inject");
     if (!panel) return;
     if (!vm) {
       panel.innerHTML = '<div class="tt-empty-inline">No inject data.</div>';
@@ -1122,14 +1071,14 @@ export function createTracePanel(root) {
       '<div class="tt-inject-note">' +
       esc(note) +
       "</div>" +
-      '<div class="io-card"><header><span class="ai-lab">inject / catalog</span>' +
-      '<button type="button" class="tt-btn ghost ml-auto" id="tt-inj-copy-req" data-copy-from="tt-inj-req" title="Click to copy">Copy</button></header><pre id="tt-inj-req"></pre></div>';
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold"><span class="ai-lab">inject / catalog</span>' +
+      '<button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-inj-copy-req" data-copy-from="tt-inj-req" title="Click to copy">Copy</button></header><pre id="tt-inj-req"></pre></div>';
     const preReq = el("tt-inj-req");
     if (preReq) preReq.textContent = prettyJSON(bag);
   }
 
-  function renderInject(u) {
-    const panel = el("tt-panel-inject");
+  function renderInject(u, host) {
+    const panel = host || el("tt-prompt-inject");
     if (!panel) return;
     if (!u) {
       panel.innerHTML = '<div class="tt-empty-inline">No unit selected.</div>';
@@ -1147,126 +1096,479 @@ export function createTracePanel(root) {
       '<div class="tt-inject-note">' +
       esc(note) +
       "</div>" +
-      '<div class="tt-split-io">' +
-      '<div class="io-card"><header><span class="ai-lab">Unit goal + inject</span>' +
-      '<button type="button" class="tt-btn ghost ml-auto" id="tt-inj-copy-req" data-copy-from="tt-inj-req" title="Click to copy">Copy</button></header><pre id="tt-inj-req"></pre></div>' +
-      '<div class="io-card"><header><span class="zeus-lab">Artifact / answer</span>' +
-      (u.error_code ? '<span class="status-pill bad">' + esc(u.error_code) + "</span>" : "") +
-      '<button type="button" class="tt-btn ghost ml-auto" id="tt-inj-copy-res" data-copy-from="tt-inj-res" title="Click to copy">Copy</button></header><pre id="tt-inj-res"></pre></div></div>';
+      '<div class="tt-split-io grid grid-cols-1 md:grid-cols-2 gap-2.5">' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold"><span class="ai-lab">Unit goal + inject</span>' +
+      '<button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-inj-copy-req" data-copy-from="tt-inj-req" title="Click to copy">Copy</button></header><pre id="tt-inj-req"></pre></div>' +
+      '<div class="card bg-base-200 border border-base-300 io-card"><header class="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300 text-xs font-semibold"><span class="zeus-lab">Artifact / answer</span>' +
+      (u.error_code ? '<span class="' + badgeFor("err") + '">' + esc(u.error_code) + "</span>" : "") +
+      '<button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-inj-copy-res" data-copy-from="tt-inj-res" title="Click to copy">Copy</button></header><pre id="tt-inj-res"></pre></div></div>';
     const preReq = el("tt-inj-req");
     const preRes = el("tt-inj-res");
     if (preReq) preReq.textContent = prompt || "(empty goal)";
     if (preRes) preRes.textContent = u.answer || "(no artifact)";
   }
 
-  function renderDetective(vm) {
-    const panel = el("tt-panel-detective");
-    if (!panel || !vm) return;
-    const d = vm.detective;
-    const pbs = vm.playbooks || [];
-    const checks = vm.promptChecks || [];
-    const g = vm.grade || "pass";
-    const pg = vm.prompt_grade || "";
-    const sum = vm.checkSummary || (H().detectiveCheckSummary ? H().detectiveCheckSummary(checks) : { label: "", tone: "" });
-    const overviewText =
-      vm.overview || (d ? "" : "Detective data not attached on this turn.");
-    const gather = Array.isArray(vm.gather) ? vm.gather : [];
-    const gatherHtml = gather.length
-      ? '<div class="tt-gather"><div class="tt-gather-head">E2E gather</div>' +
-        gather
-          .map(
-            (row) =>
-              '<div class="tt-gather-row"><span class="k">' +
-              esc(row.label) +
-              '</span><span class="v">' +
-              esc(row.value) +
-              "</span></div>"
+  function gradeBadgeClass(g) {
+    const n = (H().gradeNorm || ((x) => x))(g);
+    if (n === "fail") return "fail";
+    if (n === "warn") return "warn";
+    if (n === "pass") return "pass";
+    if (n === "skip") return "skip";
+    return "na";
+  }
+
+  function diagNestedCardHTML(inner) {
+    return (
+      '<div class="card bg-base-200 border border-base-300">' +
+      '<div class="card-body p-3 py-2 text-sm">' +
+      inner +
+      "</div></div>"
+    );
+  }
+
+  function diagNestedCardStackHTML(inners) {
+    if (!inners || !inners.length) return "";
+    return (
+      '<div class="flex flex-col gap-2 mt-2">' +
+      inners
+        .map((inner) => diagNestedCardHTML('<p class="m-0">' + inner + "</p>"))
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function detCardHTML(card) {
+    const cls = gradeBadgeClass(card.grade);
+    const border =
+      cls === "fail"
+        ? "border-error/40"
+        : cls === "warn"
+          ? "border-warning/40"
+          : cls === "pass"
+            ? "border-success/40"
+            : "border-base-300";
+    let html =
+      '<article class="card bg-base-100 border ' +
+      border +
+      ' shadow-sm det-diag-card ' +
+      cls +
+      '"><div class="card-body p-4"><h3 class="text-xs font-semibold uppercase tracking-wide text-base-content/50">' +
+      esc(card.title) +
+      "</h3>";
+    if (card.items && card.items.length) {
+      html += diagNestedCardStackHTML(card.items.map((it) => esc(it)));
+    }
+    if (card.minis && card.minis.length) {
+      html +=
+        '<div class="grid grid-cols-2 gap-2 mt-2">' +
+        card.minis
+          .map((m) =>
+            diagNestedCardHTML(
+              '<p class="text-[10px] uppercase font-mono text-base-content/50 m-0">' +
+                esc(String(m.l)) +
+                '</p><p class="font-mono font-semibold text-sm m-0">' +
+                esc(String(m.v)) +
+                "</p>"
+            )
           )
           .join("") +
-        "</div>"
+        "</div>";
+    }
+    if (card.muted) html += '<p class="text-xs text-base-content/50 font-mono mt-2">' + esc(card.muted) + "</p>";
+    if (card.jump) {
+      html +=
+        '<button type="button" class="btn btn-xs btn-ghost w-fit" data-action="tt-tab" data-tab="' +
+        esc(card.jump) +
+        '">open ' +
+        esc(card.jump) +
+        "</button>";
+    }
+    return html + "</div></article>";
+  }
+
+  function renderDetOverview(vm) {
+    const env = H().detectiveEnvelopeRows ? H().detectiveEnvelopeRows(vm) : [];
+    const la = H().detectiveLayerA ? H().detectiveLayerA(vm) : {};
+    const envDl = env.length
+      ? '<dl class="det-env grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm mt-2">' +
+        env
+          .map(
+            (r) =>
+              '<dt class="text-base-content/50">' +
+              esc(r.key) +
+              '</dt><dd class="font-mono text-xs m-0">' +
+              valueCell(r.key, r.value) +
+              "</dd>"
+          )
+          .join("") +
+        "</dl>"
+      : '<div class="hint">Detective data not attached on this turn.</div>';
+    const intent = la.intent
+      ? '<div class="mt-3"><span class="badge badge-info badge-outline gap-1"><span class="text-[10px] font-bold uppercase">intent</span> ' +
+        esc(String(la.intent)) +
+        "</span></div>"
       : "";
-    panel.innerHTML =
-      gatherHtml +
-      '<div class="diag-card">' +
-      '<div class="diag-badges">' +
-      '<span class="tt-badge ' +
-      (g === "pass" ? "ok" : g === "fail" ? "err" : "warn") +
-      '">diagnosis:' +
-      esc(g || "—") +
-      "</span>" +
-      (pg
-        ? '<span class="tt-badge ' +
-          (pg === "pass" ? "ok" : "warn") +
-          '">prompt:' +
-          esc(pg) +
-          "</span>"
-        : "") +
-      (sum && sum.label
-        ? '<span class="tt-badge ' +
-          (sum.tone === "ok" ? "ok" : "err") +
-          '">' +
-          esc(sum.label) +
-          "</span>"
-        : "") +
-      "</div>" +
-      "<h3>" +
-      esc(vm.headline || (d ? "Detective briefing" : "No detective briefing")) +
-      "</h3>" +
-      (overviewText ? "<p>" + esc(overviewText) + "</p>" : "") +
-      (pbs.length
-        ? '<div class="playbooks">' +
-          pbs
-            .map(
-              (p, i) =>
-                '<div class="playbook"><span class="num">' +
-                (i + 1) +
-                '</span><div><div class="id">' +
-                esc(p.id) +
-                "</div><div>" +
-                esc(p.title) +
-                (p.body ? " — " + esc(p.body) : "") +
-                "</div></div></div>"
-            )
-            .join("") +
-          "</div>"
-        : '<div class="playbook empty-ok">✓ No playbooks triggered</div>') +
-      (checks.length
-        ? '<div class="checklist">' +
-          (sum && sum.label
-            ? '<div class="checklist-head' +
-              (sum.tone === "ok" ? "" : " fail") +
-              '">' +
-              esc(sum.label) +
-              "</div>"
-            : "") +
-          checks
-            .map(
-              (c) =>
-                '<div class="check ' +
-                (c.ok ? "pass" : "fail") +
-                '"><span class="mark">' +
-                (c.ok ? "✓" : "✗") +
-                '</span><span class="lab">' +
-                esc(c.lab) +
-                "</span></div>"
-            )
-            .join("") +
-          "</div>"
-        : "") +
-      '</div><div class="tt-kv"><div class="k">Support pack</div><div class="v"><button type="button" class="tt-btn" data-action="copy-pack" title="Click to copy">Copy markdown pack</button></div>' +
-      '<div class="k">Hub links</div><div class="v">' +
-      (vm.session_id
-        ? '<a class="tt-link" href="' +
-          esc(hubSessionUrl(vm.session_id) || "#") +
-          '" target="_blank" rel="noopener" data-action="hub-session">session</a>'
-        : "<span class=\"tt-muted\">session</span>") +
-      " · " +
+    const layerBits = [
+      la.via ? "via=" + la.via : "",
+      la.confidence ? "conf=" + la.confidence : "",
+      la.policy_action ? "policy=" + la.policy_action : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      '<div class="card bg-base-100 shadow-sm border border-base-300 det-card"><div class="card-body p-4">' +
+      '<h2 class="card-title text-base">Envelope <span class="font-normal text-sm text-base-content/60">who / scope / mode / duration</span></h2>' +
+      envDl +
+      intent +
+      (layerBits ? '<p class="text-xs text-base-content/50 mt-2">layer_a · ' + esc(layerBits) + "</p>" : "") +
+      '<p class="text-sm text-base-content/70 mt-3">Cost / result KPIs live on <button type="button" class="btn btn-xs" data-action="tt-tab" data-tab="tools">Tools</button>. Envelope is facts only. Token IN is omitted when usage is missing (never painted as 0).</p>' +
+      "</div></div>"
+    );
+  }
+
+  function renderDetDiagnosis(vm) {
+    const model = H().detectiveDiagnosisModel
+      ? H().detectiveDiagnosisModel(vm)
+      : { cards: [], grades: [], playbooks: [], headline: vm.headline || "" };
+    const sum = vm.checkSummary || (H().detectiveCheckSummary ? H().detectiveCheckSummary(vm.promptChecks || []) : {});
+    function gradeBadge(g) {
+      const n = gradeBadgeClass(g);
+      const tone =
+        n === "fail"
+          ? "badge-error"
+          : n === "warn"
+            ? "badge-warning"
+            : n === "pass"
+              ? "badge-success"
+              : "badge-ghost";
+      return "badge badge-sm " + tone;
+    }
+    let html =
+      '<div class="card bg-base-100 shadow-sm border border-base-300 mb-4 det-card"><div class="card-body p-4">' +
+      '<div class="flex flex-wrap items-start gap-2"><h2 class="card-title text-base flex-1 min-w-[12rem]">' +
+      esc(model.headline);
+    if (model.request_kind_label) {
+      html +=
+        ' <span class="' +
+        gradeBadge(model.isDirect ? "na" : "pass") +
+        '">' +
+        esc(model.request_kind_label) +
+        "</span>";
+    }
+    html += '</h2><div class="flex flex-wrap gap-1">';
+    (model.grades || []).forEach((g) => {
+      if (!g.value) return;
+      html +=
+        '<span class="' +
+        gradeBadge(g.cls || g.value) +
+        '">' +
+        esc(g.id) +
+        ":" +
+        esc(g.value) +
+        "</span>";
+    });
+    if (sum && sum.label) {
+      html +=
+        '<span class="' +
+        (sum.tone === "ok" ? "badge badge-sm badge-success" : "badge badge-sm badge-error") +
+        '">' +
+        esc(sum.label) +
+        "</span>";
+    }
+    html += "</div></div></div></div>";
+    if (model.slowTop && model.slowTop.length) {
+      html +=
+        '<div class="card bg-base-100 shadow-sm border border-warning/40 mb-4"><div class="card-body p-4">' +
+        '<h3 class="card-title text-sm">Why was this slow?</h3>' +
+        diagNestedCardStackHTML(
+          model.slowTop.map(
+            (t) =>
+              "<b>" +
+              esc(t.label) +
+              "</b> · " +
+              esc(String(t.ms)) +
+              "ms" +
+              (t.share_pct ? " (" + t.share_pct + "%)" : "")
+          )
+        ) +
+        "</div></div>";
+    }
+    html +=
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 diag-grid">' +
+      (model.cards || []).map(detCardHTML).join("") +
+      "</div>";
+    const pbs = model.playbooks || [];
+    if (pbs.length) {
+      html +=
+        '<div class="alert alert-info mt-4"><div><p class="font-semibold">Insight playbooks <span class="font-normal opacity-80">· auto-matched</span></p>' +
+        '<p class="text-sm">Each card is a known failure pattern. Follow the actions, then return to Overview.</p></div></div>';
+      pbs.forEach((pb) => {
+        const sev = esc(pb.severity || "info");
+        const edge =
+          sev === "fail"
+            ? "border-l-error"
+            : sev === "warn"
+              ? "border-l-warning"
+              : "border-l-info";
+        html +=
+          '<article class="card bg-base-100 border-l-4 ' +
+          edge +
+          " border border-base-300 mt-3 pb " +
+          sev +
+          '"><div class="card-body p-4"><h3 class="font-semibold">' +
+          esc(pb.title) +
+          '</h3><p class="text-sm text-base-content/70">' +
+          esc(pb.summary || "") +
+          "</p>";
+        if (pb.actions && pb.actions.length) {
+          html += diagNestedCardStackHTML(pb.actions.map((a) => esc(a)));
+        }
+        html += "</div></article>";
+      });
+    } else {
+      html +=
+        '<div class="playbook empty-ok flex items-center gap-1 text-success mt-4">' +
+        iconSvg("check") +
+        " No playbooks triggered</div>";
+    }
+    html +=
+      '<div class="flex flex-wrap gap-2 mt-4">' +
+      '<button type="button" class="btn btn-sm" data-action="copy-pack">Copy markdown pack</button>' +
       (vm.preferred_req_id
-        ? '<a class="tt-link" href="' +
+        ? '<a class="btn btn-sm btn-ghost gap-1" href="' +
           esc(hubReqUrl(vm.preferred_req_id) || "#") +
-          '" target="_blank" rel="noopener" data-action="hub-req">preferred req</a>'
-        : "<span class=\"tt-muted\">preferred req</span>") +
+          '" target="_blank" rel="noopener" data-action="hub-req">Open Hub Detective ' +
+          iconSvg("external") +
+          "</a>"
+        : "") +
+      "</div>";
+    return html;
+  }
+
+  function renderDetPrompt(vm) {
+    const view = H().detectivePromptView
+      ? H().detectivePromptView(vm)
+      : { checks: vm.promptChecks || [], tiles: vm.promptChecks || [], verdict: vm.prompt_grade || "skip", summary: "", rounds: 0, checkSummary: vm.checkSummary };
+    const sum = view.checkSummary || (H().detectiveCheckSummary ? H().detectiveCheckSummary(view.checks || []) : {});
+    const v = view.verdict || "skip";
+    const alertTone =
+      v === "fail" ? "alert-error" : v === "warn" ? "alert-warning" : v === "pass" ? "alert-success" : "alert-info";
+    let html =
+      '<div class="pcl"><div class="alert ' +
+      alertTone +
+      ' mb-4 verdict ' +
+      esc(v) +
+      '"><span class="' +
+      badgeFor(v) +
+      ' vbadge">' +
+      esc(v) +
+      '</span><div><p class="font-medium vsum">' +
+      esc(view.summary || "") +
+      '</p><p class="text-xs font-mono opacity-70 vmeta">rounds checked: ' +
+      esc(String(view.rounds || 0)) +
+      (sum && sum.label ? " · " + esc(sum.label) : "") +
+      " · fix fails first, then debug tools</p></div></div>";
+    html +=
+      '<p class="text-xs text-base-content/50 mb-3">SCOPE BRIEF / MINI-SCHEMA are status tiles. Live sent-vs-catalog compare is Hub Detective.</p>';
+    html += '<div class="tiles">';
+    (view.tiles || view.checks || []).forEach((c) => {
+      const st = c.status || (c.ok ? "pass" : "fail");
+      const border =
+        st === "fail"
+          ? "border-error/40"
+          : st === "warn"
+            ? "border-warning/40"
+            : st === "pass"
+              ? "border-success/40"
+              : "border-base-300";
+      html +=
+        '<div class="card bg-base-100 border ' +
+        border +
+        " shadow-sm tile " +
+        esc(st) +
+        '" data-check-id="' +
+        esc(c.id || "") +
+        '"><div class="card-body p-3 gap-1"><div class="flex justify-between items-center top"><span class="text-[10px] uppercase font-mono text-base-content/50 grp">' +
+        esc(c.group || "") +
+        '</span><span class="' +
+        badgeFor(st) +
+        ' st ' +
+        esc(st) +
+        '">' +
+        esc(st) +
+        "</span></div><p class=\"font-semibold text-sm lab\">" +
+        esc(c.lab) +
+        "</p>";
+      if (c.detail) html += '<p class="text-xs font-mono text-base-content/60 det">' + esc(c.detail) + "</p>";
+      if (c.fix_hint) html += '<p class="text-xs text-primary fix">Fix: ' + esc(c.fix_hint) + "</p>";
+      html += "</div></div>";
+    });
+    html += "</div></div>";
+    return html;
+  }
+
+  function renderDetSession(vm) {
+    const model = H().detectiveSessionModel
+      ? H().detectiveSessionModel(vm)
+      : { kv: [], hops: [] };
+    let html =
+      '<div class="card bg-base-100 shadow-sm border border-base-300 mb-4 det-card"><div class="card-body p-4">' +
+      '<h2 class="card-title text-base">Session context <span class="font-normal text-sm text-base-content/60">zeus_client stamps</span></h2>' +
+      (model.kv.length
+        ? '<dl class="det-env grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">' +
+          model.kv
+            .map(
+              (r) =>
+                '<dt class="text-base-content/50">' +
+                esc(r.key) +
+                '</dt><dd class="font-mono text-xs m-0">' +
+                valueCell(r.key, r.value) +
+                "</dd>"
+            )
+            .join("") +
+          "</dl>"
+        : '<div class="hint">No session conversation attached to this turn.</div>') +
       "</div></div>";
+    if (model.hops.length) {
+      html +=
+        '<div class="card bg-base-100 shadow-sm border border-base-300 det-card"><div class="card-body p-4"><h2 class="card-title text-base">Related hops <span class="font-normal text-sm text-base-content/60">same chat_id</span></h2><div class="session-strip flex flex-wrap gap-2">' +
+        model.hops
+          .map(
+            (h) =>
+              '<button type="button" class="btn btn-xs font-mono pill' +
+              (h.preferred ? " btn-primary cur" : "") +
+              '" data-copy="' +
+              esc(h.req_id) +
+              '">' +
+              esc(h.verb || "hop") +
+              " · " +
+              esc(shortId(h.req_id, 10)) +
+              "</button>"
+          )
+          .join("") +
+        "</div></div></div>";
+    }
+    return html;
+  }
+
+  function paintPanel(id, html) {
+    const panel = el(id);
+    if (!panel) return;
+    panel.innerHTML = html || "";
+  }
+
+  function kpiGridHTML(tiles, title) {
+    if (!tiles || !tiles.length) {
+      return '<div class="hint">No cost / result KPIs on this turn.</div>';
+    }
+    let html = title
+      ? '<p class="text-xs uppercase tracking-wide text-base-content/50 mb-2">' +
+        esc(title) +
+        "</p>"
+      : "";
+    html += '<div class="grid grid-cols-2 md:grid-cols-3 gap-2 env-kpi">';
+    tiles.forEach((t) => {
+      html +=
+        '<div class="stat bg-base-200 rounded-box border border-base-300 p-3 kpi-tile min-w-0">' +
+        '<div class="stat-title kpi-lbl">' +
+        esc(t.label) +
+        '</div><div class="stat-value text-xl kpi-val">' +
+        esc(t.value) +
+        "</div></div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function updateTabPills(vm) {
+    const spec = H().detectiveShellSpec
+      ? H().detectiveShellSpec(vm, tab)
+      : { tabs: [] };
+    const hopEl = el("tt-hop-count");
+    const promptEl = el("tt-prompt-count");
+    const diagEl = el("tt-diag-count");
+    (spec.tabs || []).forEach((t) => {
+      if (t.id === "tools" && hopEl) {
+        hopEl.textContent = t.pill || String((vm && vm.hops && vm.hops.length) || 0);
+        hopEl.classList.toggle("badge-error", t.pillKind === "err");
+      }
+      if (t.id === "prompt" && promptEl) {
+        promptEl.hidden = !t.pill;
+        promptEl.textContent = t.pill || "";
+        promptEl.classList.toggle("badge-error", t.pillKind === "err");
+        promptEl.classList.toggle("badge-success", t.pillKind === "ok");
+      }
+      if (t.id === "diagnosis" && diagEl) {
+        diagEl.hidden = !t.pill;
+        diagEl.textContent = t.pill || "";
+        diagEl.classList.toggle("badge-warning", t.pillKind === "warn");
+        diagEl.classList.toggle("badge-error", t.pillKind === "err");
+      }
+    });
+  }
+
+  function renderOverview(vm) {
+    paintPanel("tt-panel-overview", vm ? renderDetOverview(vm) : "");
+  }
+
+  function renderDiagnosisTab(vm) {
+    paintPanel("tt-panel-diagnosis", vm ? renderDetDiagnosis(vm) : "");
+  }
+
+  function renderPromptTab(vm, jobUnit) {
+    const panel = el("tt-panel-prompt");
+    if (!panel) return;
+    if (!vm && !jobUnit) {
+      panel.innerHTML = "";
+      return;
+    }
+    let html = vm ? renderDetPrompt(vm) : "";
+    html += '<div id="tt-prompt-inject" class="mt-3"></div>';
+    panel.innerHTML = html || '<div class="tt-empty-inline">No prompt checklist on this turn.</div>';
+    if (jobMode) renderInject(jobUnit, el("tt-prompt-inject"));
+    else if (vm) renderTurnInject(vm, el("tt-prompt-inject"));
+  }
+
+  function renderTools(vm) {
+    const panel = el("tt-panel-tools");
+    if (!panel) return;
+    if (!vm) {
+      panel.innerHTML = "";
+      return;
+    }
+    const kpis = H().detectiveCostResultKpis
+      ? H().detectiveCostResultKpis(vm)
+      : H().detectiveTokenTiles
+        ? H().detectiveTokenTiles(vm)
+        : [];
+    panel.innerHTML =
+      '<div class="card bg-base-100 shadow-sm border border-base-300 mb-4 det-card"><div class="card-body p-4">' +
+      '<h2 class="card-title text-base">Cost / result <span class="font-normal text-sm text-base-content/60">tokens · HTTP · records</span></h2>' +
+      kpiGridHTML(kpis, "Provider tokens and result") +
+      "</div></div>" +
+      '<div class="card bg-base-100 shadow-sm border border-base-300 mb-4 det-card"><div class="card-body p-4">' +
+      '<h2 class="card-title text-base">AI request <span class="font-normal text-sm text-base-content/60">LLM round · req∥res</span></h2>' +
+      '<div id="tt-tools-llm"></div></div></div>' +
+      '<div class="card bg-base-100 shadow-sm border border-base-300 det-card"><div class="card-body p-4">' +
+      '<h2 class="card-title text-base">Tool calls <span class="font-normal text-sm text-base-content/60">this turn · table then req∥res</span></h2>' +
+      '<div id="tt-tools-hops"></div></div></div>';
+    renderLlm(vm, el("tt-tools-llm"));
+    renderHops(vm, el("tt-tools-hops"));
+  }
+
+  function renderSessionTab(vm) {
+    paintPanel("tt-panel-session", vm ? renderDetSession(vm) : "");
+  }
+
+  function renderDetailTabs(vm, jobUnit) {
+    updateTabPills(vm);
+    renderOverview(vm);
+    renderDiagnosisTab(vm);
+    renderPromptTab(vm, jobUnit);
+    renderTimeline(vm);
+    renderTools(vm);
+    renderSessionTab(vm);
+    renderRaw(vm);
   }
 
   function renderRaw(vm) {
@@ -1293,10 +1595,11 @@ export function createTracePanel(root) {
       trace: vm.trace,
     };
     panel.innerHTML =
-      '<div class="io-card raw-card"><header>TurnResult.debug / public_trace projection' +
-      '<button type="button" class="tt-btn ghost ml-auto" id="tt-raw-copy" data-copy-from="tt-raw-json" title="Click to copy">Copy JSON</button></header>' +
+      '<div class="card bg-base-100 shadow-sm border border-base-300 io-card raw-card"><div class="card-body p-4">' +
+      '<div class="flex items-center gap-2 raw-head"><h2 class="card-title text-base m-0">Raw bundle</h2>' +
+      '<button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-raw-copy" data-copy-from="tt-raw-json" title="Click to copy">Copy JSON</button></div>' +
       '<pre id="tt-raw-json" hidden></pre>' +
-      '<div class="trace-dump-viewer" id="tt-raw-host"></div></div>';
+      '<div class="trace-dump-viewer mt-2" id="tt-raw-host"></div></div></div>';
     const jsonEl = el("tt-raw-json");
     if (jsonEl) jsonEl.textContent = prettyJSON(bundle);
     const host = el("tt-raw-host");
@@ -1383,12 +1686,13 @@ export function createTracePanel(root) {
           box.innerHTML = "";
         }
       }
-      if (tab === "timeline" || tab === "detective") tab = "hops";
+      if (["hops", "llm", "inject", "detective"].includes(tab)) tab = "overview";
+      if (u && u.status === "err" && lastAutoTabKey !== u.unit_id) {
+        lastAutoTabKey = u.unit_id;
+        tab = "diagnosis";
+      }
       setTab(tab);
-      renderHops(unitVm);
-      renderLlm(unitVm);
-      renderInject(u);
-      renderRaw(unitVm);
+      renderDetailTabs(unitVm, u);
       return;
     }
 
@@ -1412,15 +1716,7 @@ export function createTracePanel(root) {
       lastAutoTabKey = null;
     }
 
-    // if filtered out, pick first visible
-    const visible = vms.filter(matchesFilter);
-    let vm = vms.find((v) => v.key === selectedKey);
-    if (vm && !matchesFilter(vm) && visible.length) {
-      selectedKey = visible[0].key;
-      vm = visible[0];
-      hopSel = 0;
-      llmRound = 0;
-    }
+    const vm = vms.find((v) => v.key === selectedKey) || vms[0];
 
     // default hop to preferred
     if (vm && hopSel === 0 && vm.hops.length) {
@@ -1433,20 +1729,13 @@ export function createTracePanel(root) {
     renderDetailHead(vm);
     renderDiagnosis(vm);
 
-    // auto Detective once when unhealthy
+    if (["hops", "llm", "inject", "detective"].includes(tab)) tab = "overview";
     if (vm && needsDiagnosis(vm) && lastAutoTabKey !== vm.key) {
       lastAutoTabKey = vm.key;
-      tab = "detective";
+      tab = "diagnosis";
     }
     setTab(tab);
-
-    renderTimeline(vm);
-    if (storyMode) hydrateStory(vm);
-    renderHops(vm);
-    renderLlm(vm);
-    renderTurnInject(vm);
-    renderDetective(vm);
-    renderRaw(vm);
+    renderDetailTabs(vm, null);
   }
 
   function eventEl(e) {
@@ -1501,10 +1790,17 @@ export function createTracePanel(root) {
       copyText(supportPack(vm), act);
       return;
     }
+    if (action === "tt-tab") {
+      const next = act.dataset.tab || "overview";
+      tab = next;
+      if (selectedKey) lastAutoTabKey = selectedKey;
+      setTab(tab);
+      return;
+    }
     if (action === "open-pref" && vm) {
       const pi = vm.hops.findIndex((h) => h.preferred);
       hopSel = pi >= 0 ? pi : 0;
-      tab = "hops";
+      tab = "tools";
       if (vm) vm._hopTouched = true;
       render();
       toast("Jumped to preferred hop");
@@ -1534,24 +1830,17 @@ export function createTracePanel(root) {
     inited = true;
     root.addEventListener("click", onRootClick);
 
-    el("tt-search")?.addEventListener("input", (e) => {
-      search = e.target.value || "";
-      render();
-    });
-
-    el("tt-filters")?.addEventListener("click", (e) => {
-      const chip = e.target.closest(".tt-chip");
-      if (!chip) return;
-      filter = chip.dataset.filter || "all";
-      el("tt-filters")
-        .querySelectorAll(".tt-chip")
-        .forEach((c) => c.classList.toggle("on", c === chip));
-      render();
-    });
+    const drop = el("tt-turn-dropdown");
+    if (drop) {
+      drop.addEventListener("toggle", () => {
+        const s = el("tt-turn-summary");
+        if (s) s.setAttribute("aria-expanded", drop.open ? "true" : "false");
+      });
+    }
 
     root.querySelectorAll(".tt-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
-        tab = btn.dataset.tab || "timeline";
+        tab = btn.dataset.tab || "overview";
         // user chose tab — don't auto-override until selection changes
         if (selectedKey) lastAutoTabKey = selectedKey;
         setTab(tab);
@@ -1571,7 +1860,7 @@ export function createTracePanel(root) {
       a.download = "zeus-traces-" + cid + "-" + Date.now() + ".json";
       a.click();
       URL.revokeObjectURL(a.href);
-      toast("✓ exported");
+      toast("exported");
     });
 
     el("tt-detective")?.addEventListener("click", () => {

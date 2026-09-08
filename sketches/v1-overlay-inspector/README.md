@@ -1,17 +1,14 @@
 # Sketch: v1 overlay inspector
 
 **Date**: 2026-08-21  
-**Status**: Locked visual source for `zeus_client_chat_trace@1.0.0`  
-**Related Plan**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md`
+**Status**: Superseded — chrome spec is `.grok/guides/STYLE_HTML_CSS.md` (DaisyUI light Detective IA). Overlay shell (lightning toggle, close, footer) still applies.  
+**Related Plan**: `.grok/plans/WIDGET_STYLE_HTML_CSS.md` (current); `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (v1 ingest)
 
-## What this mocks
+## What this mocks (historical v1 IA)
 
-Floating **Zeus Tracer** overlay (lightning toggle, bottom-left) whose interior matches the shipped `zeus_client` Turn traces inspector:
+Floating **Zeus Tracer** overlay (lightning toggle, bottom-left). **Do not** copy this sketch's dark DevTools tabs into production.
 
-- Header: title · turn count · client version · Export · Copy all · Detective ↗ · close
-- Session bar: session_id · round · contract · preferred req · Hub · cache chip
-- Turn list (filter/search) + detail (metrics, diagnosis strip, tabs)
-- Tabs: Timeline · Hops · LLM I/O · Inject · Detective · Raw
+Current inspector tabs: Overview · Diagnosis · Prompt · Timeline · Tools · Session · Raw. Title: **Turn traces**. Visual spec: sibling `zeus_client/sketches/007-traces-detective/` and `008-traces-light/`.
 
 Use the **state chips** (empty / healthy / failed / cache / Layer A / job) and **overlay / docked** toggle.
 

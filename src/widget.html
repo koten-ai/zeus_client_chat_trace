@@ -12,59 +12,77 @@
   </svg>
 </button>
 
-<aside id="debug-panel" class="debug-panel tt-panel is-hidden" aria-hidden="true" role="dialog" aria-labelledby="debug-panel-title">
-  <div class="tt-panel-inner" id="tt-panel">
-    <header class="tt-header">
-      <h2 id="debug-panel-title" class="tt-title">Zeus Tracer</h2>
-      <span class="tt-badge" id="tt-turn-count">0 turns</span>
-      <span class="tt-badge tt-badge-info" id="tt-client-ver" hidden></span>
-      <div class="tt-hdr-actions">
-        <button type="button" class="tt-btn ghost" id="tt-export" title="Download journal JSON">Export</button>
-        <button type="button" class="tt-btn ghost" id="tt-copy-all" data-action="copy-all" title="Copy full trace bundle">Copy all</button>
-        <button type="button" class="tt-btn primary" id="tt-detective" title="Open Hub Detective">Detective ↗</button>
-        <button type="button" class="tt-btn ghost tt-close" id="debug-close" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6L6 18M6 6l12 12"></path>
-          </svg>
+<aside id="debug-panel" class="debug-panel tt-panel card bg-base-100 border border-base-300 shadow-sm is-hidden" aria-hidden="true" role="dialog" aria-labelledby="debug-panel-title">
+  <div class="tt-panel-inner min-h-0 flex flex-col overflow-hidden flex-1" id="tt-panel">
+    <header class="tt-header shrink-0 px-3 py-2 bg-base-100 border-b border-base-300 box-border">
+      <div class="tt-header-row">
+        <h2 id="debug-panel-title" class="tt-title text-sm font-semibold m-0 shrink-0">Turn traces</h2>
+        <span class="badge badge-ghost badge-sm" id="tt-turn-count" hidden>0 turns</span>
+        <div class="tt-hdr-actions" hidden>
+          <button type="button" class="btn btn-xs btn-ghost" id="tt-export" title="Download journal JSON">Export</button>
+          <button type="button" class="btn btn-xs btn-ghost" id="tt-copy-all" data-action="copy-all" title="Copy full trace bundle">Copy all</button>
+          <button type="button" class="btn btn-xs btn-primary gap-1" id="tt-detective" title="Open Hub Detective">
+            <span>Detective</span>
+            <span class="inline-block w-3.5 h-3.5" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </span>
+          </button>
+        </div>
+        <button type="button" class="btn btn-xs btn-ghost tt-close" id="debug-close" aria-label="Close">
+          <span class="inline-block w-3.5 h-3.5" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </span>
         </button>
       </div>
     </header>
     <div class="tt-session" id="tt-session" hidden></div>
-    <div class="tt-body" id="tt-body" hidden>
-      <nav class="tt-turn-list" aria-label="Turns">
-        <div class="tt-list-tools">
-          <input class="tt-search" id="tt-search" placeholder="Filter turns, tools, req_id…" />
-          <div class="tt-filters" id="tt-filters">
-            <button type="button" class="tt-chip on" data-filter="all">All</button>
-            <button type="button" class="tt-chip" data-filter="error">Errors</button>
-            <button type="button" class="tt-chip" data-filter="tools">Has tools</button>
-            <button type="button" class="tt-chip" data-filter="agent" hidden>Agent</button>
-          </div>
+    <div class="tt-body flex-1 min-h-0 flex flex-col overflow-hidden" id="tt-body" hidden>
+      <div class="tt-detail flex flex-col min-w-0 min-h-0 overflow-visible flex-1">
+        <div class="tt-detail-head px-3 pt-2.5 pb-1.5 border-b border-base-300" id="tt-detail-head"></div>
+        <div class="tt-diagnosis alert mx-3 mt-2" id="tt-diagnosis" hidden></div>
+        <div class="tt-turn-picker px-3 pt-2 relative z-20 shrink-0">
+          <p class="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold mb-1" id="tt-turn-picker-label">Turn</p>
+          <details class="dropdown w-full pb-1" id="tt-turn-dropdown">
+            <summary id="tt-turn-summary" class="tt-turn-trigger" aria-labelledby="tt-turn-picker-label" aria-haspopup="listbox" aria-expanded="false">
+              <span class="dot" id="tt-pick-dot" aria-hidden="true"></span>
+              <span class="n" id="tt-pick-n"></span>
+              <span class="q" id="tt-pick-q"></span>
+              <span class="meta" id="tt-pick-meta"></span>
+              <span class="badge badge-warning badge-xs shrink-0" id="tt-pick-err" hidden></span>
+              <span class="tt-turn-chevron inline-block w-4 h-4 shrink-0 text-base-content/50" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </span>
+            </summary>
+            <div id="tt-turns" class="dropdown-content bg-base-100 rounded-xl z-[50] w-full p-0 shadow-xl border border-base-300 mt-1 max-h-72 overflow-y-auto tt-turns" role="listbox" aria-label="Turns"></div>
+          </details>
         </div>
-        <div id="tt-turns" class="tt-turns"></div>
-      </nav>
-      <div class="tt-detail">
-        <div class="tt-detail-head" id="tt-detail-head"></div>
-        <div class="tt-diagnosis" id="tt-diagnosis" hidden></div>
-        <div class="tt-tabs" role="tablist">
-          <button type="button" class="tt-tab on" data-tab="timeline" data-turn role="tab">Timeline</button>
-          <button type="button" class="tt-tab" data-tab="hops" data-turn data-job role="tab">Hops <span class="tt-count" id="tt-hop-count">0</span></button>
-          <button type="button" class="tt-tab" data-tab="llm" data-turn data-job role="tab">LLM I/O</button>
-          <button type="button" class="tt-tab" data-tab="inject" data-turn data-job role="tab">Inject / goal</button>
-          <button type="button" class="tt-tab" data-tab="detective" data-turn role="tab">Detective</button>
-          <button type="button" class="tt-tab" data-tab="raw" data-turn data-job role="tab">Raw</button>
+        <div class="tabs tabs-boxed tt-tabs bg-base-200 px-2 py-1 w-full rounded-none" role="tablist" aria-label="Turn detail">
+          <button type="button" class="tab tt-tab tab-active on" data-tab="overview" data-turn data-job role="tab" aria-selected="true" aria-controls="tt-panel-overview">Overview</button>
+          <button type="button" class="tab tt-tab" data-tab="diagnosis" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-diagnosis">Diagnosis <span class="badge badge-xs ml-1" id="tt-diag-count" hidden></span></button>
+          <button type="button" class="tab tt-tab" data-tab="prompt" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-prompt">Prompt <span class="badge badge-xs ml-1" id="tt-prompt-count" hidden></span></button>
+          <button type="button" class="tab tt-tab" data-tab="timeline" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-timeline">Timeline</button>
+          <button type="button" class="tab tt-tab" data-tab="tools" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-tools">Tools <span class="badge badge-xs ml-1" id="tt-hop-count">0</span></button>
+          <button type="button" class="tab tt-tab" data-tab="session" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-session">Session</button>
+          <button type="button" class="tab tt-tab" data-tab="raw" data-turn data-job role="tab" aria-selected="false" aria-controls="tt-panel-raw">Raw</button>
         </div>
-        <div class="tt-tab-panels">
-          <div class="tt-tab-panel on" id="tt-panel-timeline" role="tabpanel"></div>
-          <div class="tt-tab-panel" id="tt-panel-hops" role="tabpanel"></div>
-          <div class="tt-tab-panel" id="tt-panel-llm" role="tabpanel"></div>
-          <div class="tt-tab-panel" id="tt-panel-inject" role="tabpanel"></div>
-          <div class="tt-tab-panel" id="tt-panel-detective" role="tabpanel"></div>
+        <div class="tt-tab-panels flex-1 min-h-0 overflow-auto p-3">
+          <div class="tt-tab-panel on" id="tt-panel-overview" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-diagnosis" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-prompt" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-timeline" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-tools" role="tabpanel"></div>
+          <div class="tt-tab-panel" id="tt-panel-session" role="tabpanel"></div>
           <div class="tt-tab-panel" id="tt-panel-raw" role="tabpanel"></div>
         </div>
       </div>
     </div>
-    <div id="tt-empty" class="tt-empty">No turn run yet.</div>
+    <div id="tt-empty" class="tt-empty flex flex-1 items-center justify-center text-sm text-base-content/60 p-4">No turn run yet.</div>
     <footer id="debug-panel-footer" class="debug-panel-footer" aria-label="Widget version">
       <span id="debug-panel-version" class="debug-panel-version">v—</span>
     </footer>

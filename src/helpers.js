@@ -64,13 +64,71 @@ import {
     return true;
   }
 
+  function gradeNorm(g) {
+    const s = String(g || "").toLowerCase();
+    if (["fail", "error", "err", "failed"].includes(s)) return "fail";
+    if (["warn", "warning"].includes(s)) return "warn";
+    if (["pass", "ok", "healthy", "clear"].includes(s)) return "pass";
+    if (s === "skip") return "skip";
+    if (["n/a", "na", "n-a"].includes(s)) return "na";
+    return "";
+  }
+
+  function isScopeInjectCheck(id) {
+    return id === "scope_brief" || id === "mini_schema";
+  }
+
+  function promptInjectStatusNorm(status) {
+    const n = gradeNorm(status);
+    if (n === "pass" || n === "fail") return n;
+    const s = String(status || "").toLowerCase();
+    if (s === "pass" || s === "fail") return s;
+    return "";
+  }
+
+  function promptCheckVisibleOnPromptTab(c) {
+    if (!c || !isScopeInjectCheck(c.id)) return true;
+    return !!promptInjectStatusNorm(c.status);
+  }
+
+  function promptTabTile(c) {
+    if (!c || !isScopeInjectCheck(c.id)) return c;
+    return {
+      ok: c.ok,
+      lab: c.lab,
+      status: promptInjectStatusNorm(c.status) || c.status,
+      id: c.id,
+      group: c.group,
+      detail: "",
+      fix_hint: "",
+      interactive: false,
+    };
+  }
+
   function normalizePromptCheck(c) {
-    if (typeof c === "string") return { ok: true, lab: c, status: "pass" };
+    if (typeof c === "string") {
+      return {
+        ok: true,
+        lab: c,
+        status: "pass",
+        id: "",
+        group: "",
+        detail: "",
+        fix_hint: "",
+        interactive: false,
+      };
+    }
     const status = asDisplayText(c && c.status).toLowerCase();
+    const id = asDisplayText(c && c.id);
     return {
       ok: checkItemOk(c),
       lab: asDisplayText((c && (c.lab || c.label || c.name)) || "?") || "?",
-      status: status,
+      status: status || (checkItemOk(c) ? "pass" : "fail"),
+      id: id,
+      group: asDisplayText(c && c.group),
+      detail: asDisplayText(c && (c.detail || c.summary)),
+      fix_hint: asDisplayText(c && (c.fix_hint || c.fixHint || c.hint)),
+      interactive: !!(c && c.interactive) && !isScopeInjectCheck(id),
     };
   }
 
@@ -708,7 +766,7 @@ import {
         '">' +
         escapeHtml(s.name) +
         "</div>" +
-        '<div class="tw-track"><i class="' +
+        '<div class="tw-track"><i class="tw-bar ' +
         escapeHtml(s.cls || "other") +
         '" style="left:' +
         left.toFixed(2) +
@@ -724,6 +782,81 @@ import {
       '<span><i class="sw ai"></i>ai · external LLM</span>' +
       '<span><i class="sw tool"></i>tool · zeus / pipeline step</span>' +
       '<span><i class="sw other"></i>other · dispatch / auth / rate / storage</span></div></div>';
+    return html;
+  }
+
+  function timelineSpeedKpis(vm) {
+    vm = vm || {};
+    const m = vm.metrics || {};
+    const wall = Number(m.total) || 0;
+    let ai = Number(m.aiMs) || 0;
+    let api = Number(m.zeusMs) || 0;
+    const rounds = (vm.llmRounds && vm.llmRounds.length) || vm.trace && vm.trace.rounds || 0;
+    const spans = expandTraceSpans(vm.spans || [], vm.steps || []);
+    if (!ai || !api) {
+      let spanAi = 0;
+      let spanApi = 0;
+      spans.forEach((s) => {
+        if (!s) return;
+        if (s.cls === "ai") spanAi += s.ms || 0;
+        if (s.cls === "tool") spanApi += s.ms || 0;
+      });
+      if (!ai) ai = spanAi;
+      if (!api) api = spanApi;
+    }
+    let ttft = 0;
+    let preLlm = 0;
+    for (let i = 0; i < spans.length; i++) {
+      const s = spans[i];
+      if (!s) continue;
+      if (!ttft && s.cls === "tool") ttft = s.at || 0;
+      if (s.cls === "ai") {
+        preLlm = s.at || 0;
+        if (!ttft) ttft = s.ms || 0;
+        break;
+      }
+    }
+    const aiShare = wall > 0 ? ai / wall : 0;
+    const apiShare = wall > 0 ? api / wall : 0;
+    function pct(x) {
+      if (!isFinite(x) || x < 0) return "—";
+      return (Math.round(x * 1000) / 10).toFixed(1) + "%";
+    }
+    return [
+      { label: "wall", value: (wall | 0) + "ms", grade: wall >= 10000 ? "warn" : "" },
+      {
+        label: "AI share",
+        value: pct(aiShare),
+        grade: aiShare > 0.9 && wall > 3000 ? "warn" : "pass",
+      },
+      { label: "API share", value: pct(apiShare), grade: "" },
+      { label: "TTFT", value: (ttft | 0) + "ms", grade: "" },
+      { label: "pre-LLM", value: Math.round(preLlm) + "ms", grade: "" },
+      {
+        label: "rounds",
+        value: String(rounds),
+        grade: rounds >= 4 ? "fail" : rounds >= 3 ? "warn" : "pass",
+      },
+    ];
+  }
+
+  function timelineSpeedKpiHTML(vm) {
+    const tiles = timelineSpeedKpis(vm);
+    let html =
+      '<div class="tab-kpi">' +
+      '<div class="kpi-head">Speed / efficiency KPIs <span class="sub">shares of wall clock</span></div>' +
+      '<div class="kpi-grid">';
+    tiles.forEach((t) => {
+      html +=
+        '<div class="kpi-tile"><span class="kpi-lbl">' +
+        escapeHtml(t.label) +
+        '</span><span class="kpi-val' +
+        (t.grade ? " " + t.grade : "") +
+        '">' +
+        escapeHtml(t.value) +
+        "</span></div>";
+    });
+    html += "</div></div>";
     return html;
   }
 
@@ -1126,7 +1259,7 @@ import {
       "<header><span>Decomposition</span><span class=\"tt-decomp-badges\">" +
       badges +
       "</span>" +
-      '<button type="button" class="tt-btn ghost ml-auto" id="tt-decomp-copy" data-copy-from="tt-decomp-json" title="Click to copy">Copy</button></header>' +
+      '<button type="button" class="btn btn-xs btn-ghost ml-auto" id="tt-decomp-copy" data-copy-from="tt-decomp-json" title="Click to copy">Copy</button></header>' +
       '<pre id="tt-decomp-json" hidden></pre>' +
       (info.summary
         ? '<p class="tt-decomp-summary">' + esc(info.summary) + "</p>"
@@ -1294,6 +1427,625 @@ import {
     });
   }
 
+  function asObj(x) {
+    if (x && typeof x === "object") return x;
+    if (typeof x === "string") return tryParseJSON(x);
+    return null;
+  }
+
+  function diagObj(vm) {
+    const d = vm && vm.detective && typeof vm.detective === "object" ? vm.detective : {};
+    if (d.diagnosis && typeof d.diagnosis === "object") return d.diagnosis;
+    return d;
+  }
+
+  function hopLooksV2Direct(h) {
+    if (!h || typeof h !== "object") return null;
+    const bits = [h.url, h.path, h.path_class, h.verb];
+    const req = asObj(h.req) || {};
+    bits.push(req.path, req.url, req.method && req.path ? req.method + " " + req.path : "");
+    for (let i = 0; i < bits.length; i++) {
+      const s = String(bits[i] || "");
+      const m = s.match(/\/v2\/([^/]+)\/([^/]+)\/([^/]+)\/([^/?#]+)/);
+      if (m) {
+        return {
+          bucket: m[1],
+          scope: m[2],
+          collection: m[3],
+          verb: m[4],
+          path: "/v2/" + m[1] + "/" + m[2] + "/" + m[3] + "/" + m[4],
+          method: String(req.method || h.method || "POST"),
+        };
+      }
+    }
+    return null;
+  }
+
+  function detectiveIsDirectTurn(vm) {
+    vm = vm || {};
+    const diag = diagObj(vm);
+    const rk = String(diag.request_kind || "").toLowerCase();
+    if (rk === "http_api") return true;
+    if (rk === "chat_turn") return false;
+    const llm = vm.llmRounds || [];
+    if (llm.length) return false;
+    return !!(vm.hops || []).some(hopLooksV2Direct);
+  }
+
+  function detectiveV2Direct(vm) {
+    vm = vm || {};
+    const hops = vm.hops || [];
+    let hit = null;
+    let hop = null;
+    for (let i = 0; i < hops.length; i++) {
+      const parsed = hopLooksV2Direct(hops[i]);
+      if (parsed) {
+        hit = parsed;
+        hop = hops[i];
+        if (hops[i].preferred) break;
+      }
+    }
+    if (!hit) return { isDirect: detectiveIsDirectTurn(vm) };
+    const res = asObj(hop.res) || asObj(hop.body) || {};
+    const items = Array.isArray(res.items) ? res.items : null;
+    const returned =
+      res.returned_count != null
+        ? Number(res.returned_count)
+        : items
+          ? items.length
+          : null;
+    const slim = items == null && res.status != null && returned == null;
+    return {
+      isDirect: true,
+      verb: hit.verb,
+      path: hit.path,
+      method: hit.method,
+      collection: hit.collection,
+      bucket: hit.bucket,
+      scope: hit.scope,
+      status: hop.status != null ? hop.status : res.status,
+      bytes: hop.bytes,
+      ms: hop.ms,
+      args: asObj(hop.req) || {},
+      output: {
+        status: res.status,
+        returned: returned,
+        itemsN: items ? items.length : null,
+        slim: slim || (items == null && res.status != null),
+        truncated: res.truncated,
+        scored: res.scored,
+      },
+    };
+  }
+
+  function detectivePlaybookCards(d) {
+    if (!d) return [];
+    const diag = d.diagnosis && typeof d.diagnosis === "object" ? d.diagnosis : d;
+    const pbs = d.playbooks || diag.playbooks || [];
+    if (!Array.isArray(pbs)) return [];
+    return pbs.map((p, i) => {
+      if (typeof p === "string") {
+        return { id: p, title: p, summary: p, severity: "info", actions: [] };
+      }
+      return {
+        id: p.id || p.name || "pb_" + (i + 1),
+        title: p.title || p.name || p.id || "Playbook",
+        summary:
+          asDisplayText(p.summary) ||
+          asDisplayText(p.body) ||
+          asDisplayText(p.tip) ||
+          asDisplayText(p.message) ||
+          asDisplayText(p.description),
+        severity: gradeNorm(p.severity) || "warn",
+        actions: Array.isArray(p.actions) ? p.actions.map((a) => String(a)) : [],
+      };
+    });
+  }
+
+  function detectiveInnerTabs(vm) {
+    vm = vm || {};
+    const diag = diagObj(vm);
+    const gradeKeys = [
+      "prompt_grade",
+      "speed_grade",
+      "error_grade",
+      "output_grade",
+      "pipeline_grade",
+    ];
+    const bad = gradeKeys
+      .map((k) => gradeNorm(diag[k]))
+      .filter((g) => g === "warn" || g === "fail");
+    const checks = Array.isArray(vm.promptChecks)
+      ? vm.promptChecks
+      : detectivePromptChecks(vm.detective);
+    const sum = detectiveCheckSummary(checks);
+    const hopFails = (vm.hops || []).filter((h) => (Number(h.status) || 0) >= 400).length;
+    const promptPill = sum.total
+      ? sum.tone === "ok"
+        ? sum.passed + "/" + sum.total
+        : String(sum.total - sum.passed)
+      : "";
+    return [
+      { id: "overview", label: "Overview", enabled: true },
+      {
+        id: "diagnosis",
+        label: "Diagnosis",
+        enabled: true,
+        pill: bad.length ? String(bad.length) : "",
+        pillKind: bad.length ? "warn" : "",
+      },
+      {
+        id: "prompt",
+        label: "Prompt",
+        enabled: true,
+        pill: promptPill,
+        pillKind: sum.total ? (sum.tone === "ok" ? "ok" : "err") : "",
+      },
+      { id: "timeline", label: "Timeline", enabled: true },
+      {
+        id: "tools",
+        label: "Tools",
+        enabled: true,
+        pill: hopFails ? String(hopFails) : String((vm.hops || []).length || 0),
+        pillKind: hopFails ? "err" : "",
+      },
+      { id: "session", label: "Session", enabled: true },
+      { id: "raw", label: "Raw", enabled: true },
+    ];
+  }
+
+  function detectiveNeedsAttention(vm) {
+    if (!vm) return false;
+    if (vm.status && vm.status !== "ok") return true;
+    const g = gradeNorm(vm.grade);
+    if (g === "warn" || g === "fail") return true;
+    if (vm.errCount > 0) return true;
+    const diag = diagObj(vm);
+    const gradeKeys = [
+      "prompt_grade",
+      "speed_grade",
+      "error_grade",
+      "output_grade",
+      "pipeline_grade",
+    ];
+    if (
+      gradeKeys.some((k) => {
+        const gg = gradeNorm(diag[k]);
+        return gg === "warn" || gg === "fail";
+      })
+    ) {
+      return true;
+    }
+    const pbs = vm.playbooks || detectivePlaybookCards(vm.detective);
+    return Array.isArray(pbs) && pbs.length > 0;
+  }
+
+  function detectiveDefaultTab(vm) {
+    return detectiveNeedsAttention(vm) ? "diagnosis" : "overview";
+  }
+
+  function detectiveShellSpec(vm, currentTab) {
+    const tabs = detectiveInnerTabs(vm);
+    const want = currentTab || detectiveDefaultTab(vm);
+    const enabled = tabs.find((t) => t.id === want && t.enabled);
+    return { tabs: tabs, current: enabled ? want : detectiveDefaultTab(vm) };
+  }
+
+  function omitEmpty(val) {
+    if (val == null) return "";
+    const s = String(val).trim();
+    if (!s || s === "—" || s === "-" || s === "undefined" || s === "null") return "";
+    return s;
+  }
+
+  function detectiveEnvelopeRows(vm) {
+    vm = vm || {};
+    const t = vm.trace || {};
+    const d = vm.detective || {};
+    const ov = d.overview && typeof d.overview === "object" ? d.overview : {};
+    const tgt = (ov.target && typeof ov.target === "object" ? ov.target : null) ||
+      (t.target && typeof t.target === "object" ? t.target : {}) ||
+      {};
+    const sess = t.session && typeof t.session === "object" ? t.session : {};
+    const diag = diagObj(vm);
+    const prompt = (d.prompt && typeof d.prompt === "object" ? d.prompt : {}) || {};
+    const dp = diag.prompt && typeof diag.prompt === "object" ? diag.prompt : {};
+    const hops = vm.hops || [];
+    const pref = omitEmpty(vm.preferred_req_id || ov.preferred_req_id);
+    const rows = [];
+    function add(key, val) {
+      const v = omitEmpty(val);
+      if (!v) return;
+      rows.push({ key: key, value: v });
+    }
+    add("req_id", pref);
+    const ms =
+      ov.total_ms != null
+        ? ov.total_ms
+        : vm.metrics && vm.metrics.total != null
+          ? vm.metrics.total
+          : diag.slow && (diag.slow.wall_ms || diag.slow.total_ms);
+    if (ms) add("duration", fmtMs(ms));
+    add("scope", tgt.scope || [tgt.bucket, tgt.scope].filter(Boolean).join("/"));
+    const targetLine = [tgt.bucket, tgt.scope, tgt.collection].filter(Boolean).join("/");
+    add("target", targetLine);
+    const base =
+      dp.chat_request_base_id ||
+      prompt.base_id ||
+      prompt.lineage ||
+      "";
+    const custom = dp.custom_label || dp.chat_request_custom_id || "";
+    if (omitEmpty(base) || omitEmpty(custom)) {
+      add("lineage", (omitEmpty(base) || "—") + " · " + (omitEmpty(custom) || "custom —"));
+    }
+    add("mode", tgt.mode || vm.mode);
+    add("session_id", vm.session_id || sess.id || sess.session_id || t.session_id);
+    add("chat_id", t.chat_id || sess.chat_id || vm.chat_id || ov.chat_id);
+    add("turn_id", vm.turn_id || t.turn_id || sess.turn_id || ov.turn_id);
+    add("contract", vm.contract_status || t.contract_status || sess.contract_status);
+    const edgeHop = hops.find((h) => hopLooksV2Direct(h)) || hops[0];
+    if (edgeHop) {
+      const v2 = hopLooksV2Direct(edgeHop);
+      const edge =
+        (v2 ? (edgeHop.req && edgeHop.req.method) || "POST" : "") +
+        (v2 ? " " + v2.path : edgeHop.verb ? " " + edgeHop.verb : "") +
+        (edgeHop.status != null ? "  " + edgeHop.status : "") +
+        (edgeHop.bytes != null ? "  " + fmtBytes(edgeHop.bytes) : "");
+      add("edge", edge.trim());
+    }
+    return rows;
+  }
+
+  function detectiveTokenTiles(vm) {
+    vm = vm || {};
+    const t = vm.trace || {};
+    const d = vm.detective || {};
+    const ov = d.overview && typeof d.overview === "object" ? d.overview : {};
+    const tok = (ov.tokens && typeof ov.tokens === "object" ? ov.tokens : null) ||
+      (t.tokens && typeof t.tokens === "object" ? t.tokens : {}) ||
+      {};
+    const tiles = [];
+    function add(id, label, value) {
+      if (value == null || value === "") return;
+      tiles.push({ id: id, label: label, value: String(value) });
+    }
+    const missingUsage = tok.ok === false || (tok.prompt == null && tok.total == null);
+    if (!missingUsage && tok.prompt != null) add("token_in", "Token IN", Number(tok.prompt).toLocaleString());
+    if (tok.completion != null) add("token_out", "Token OUT", Number(tok.completion).toLocaleString());
+    if (tok.total != null) add("token_total", "TOTAL", Number(tok.total).toLocaleString());
+    const rounds = ov.rounds != null ? ov.rounds : (vm.llmRounds || []).length;
+    if (rounds) add("rounds", "LLM rounds", String(rounds));
+    const toolsN = (vm.hops || []).length || ov.hop_count;
+    if (toolsN) add("tools", "Tool calls", String(toolsN));
+    let records = 0;
+    let hasRows = false;
+    (vm.hops || []).forEach((h) => {
+      const res = asObj(h.res) || {};
+      if (res.returned_count != null) {
+        hasRows = true;
+        records += Number(res.returned_count) || 0;
+      } else if (Array.isArray(res.rows)) {
+        hasRows = true;
+        records += res.rows.length;
+      } else if (Array.isArray(res.items)) {
+        hasRows = true;
+        records += res.items.length;
+      }
+    });
+    if (hasRows) add("records", "Records", records.toLocaleString());
+    let bytes = 0;
+    (vm.hops || []).forEach((h) => {
+      if (typeof h.bytes === "number") bytes += h.bytes;
+    });
+    if (bytes) add("zeus_data", "Zeus data", fmtBytes(bytes));
+    const wall =
+      ov.total_ms != null
+        ? ov.total_ms
+        : vm.metrics && vm.metrics.total;
+    if (wall) add("wall", "Total time", fmtMs(wall));
+    return tiles;
+  }
+
+  function detectiveCostResultKpis(vm) {
+    const tiles = detectiveTokenTiles(vm).slice();
+    const ids = {};
+    tiles.forEach((t) => {
+      ids[t.id] = true;
+    });
+    function add(id, label, value) {
+      if (ids[id] || value == null || value === "") return;
+      ids[id] = true;
+      tiles.push({ id: id, label: label, value: String(value) });
+    }
+    const v2 = detectiveV2Direct(vm);
+    if (v2 && v2.isDirect) {
+      if (v2.status != null) add("http", "HTTP", v2.status);
+      if (v2.output && v2.output.returned != null && !ids.records) {
+        add("returned", "Returned", Number(v2.output.returned).toLocaleString());
+      }
+    } else {
+      const hops = vm && vm.hops ? vm.hops : [];
+      const pref = hops.find((h) => h && h.preferred) || hops[0];
+      if (pref && pref.status != null) add("http", "HTTP", pref.status);
+    }
+    return tiles;
+  }
+
+  function detectiveSlowTop(vm) {
+    vm = vm || {};
+    const diag = diagObj(vm);
+    const slow = diag.slow && typeof diag.slow === "object" ? diag.slow : {};
+    if (Array.isArray(slow.top) && slow.top.length) {
+      return slow.top.slice(0, 5).map((it, i) => ({
+        rank: it.rank || i + 1,
+        label: it.label || it.name || "span",
+        ms: it.ms,
+        share_pct: it.share_pct,
+        why: it.why || "",
+        kind: it.kind || "",
+      }));
+    }
+    const items = [];
+    (vm.spans || []).forEach((s) => {
+      if (s && Number(s.ms) > 0) {
+        items.push({ label: s.name || s.phase || "span", ms: Number(s.ms), kind: s.cls || "span" });
+      }
+    });
+    if (!items.length) {
+      (vm.hops || []).forEach((h) => {
+        if (h && Number(h.ms) > 0) {
+          items.push({ label: h.verb || h.name || "hop", ms: Number(h.ms), kind: "hop" });
+        }
+      });
+    }
+    items.sort((a, b) => b.ms - a.ms);
+    const wall = Number(slow.wall_ms || slow.total_ms || (vm.metrics && vm.metrics.total) || 0);
+    return items.slice(0, 3).map((it, i) => ({
+      rank: i + 1,
+      label: it.label,
+      ms: it.ms,
+      share_pct: wall ? Math.round((it.ms / wall) * 100) : undefined,
+      why: "",
+      kind: it.kind,
+    }));
+  }
+
+  function detectiveLayerA(vm) {
+    vm = vm || {};
+    const t = vm.trace || {};
+    const la = (t.layer_a && typeof t.layer_a === "object" ? t.layer_a : {}) || {};
+    const decomp = extractDecomposition({
+      trace: t,
+      hops: vm.hops,
+      llmRounds: vm.llmRounds,
+      layer_a: la,
+    });
+    return {
+      via: asDisplayText(la.via),
+      confidence: asDisplayText(la.confidence || decomp.confidence),
+      policy_action: asDisplayText(la.policy_action || decomp.policy_action),
+      summary: asDisplayText(la.summary || decomp.summary),
+      has_summary: !!(la.summary || decomp.summary),
+      has_query_decomposition: !!decomp.query_decomposition,
+      has_decomposition: !!decomp.decomposition,
+      has_confidence: !!(la.confidence || decomp.confidence),
+      has_terminate: !!(la.via || la.summary || decomp.summary),
+      terminate_via: asDisplayText(la.via),
+      intent:
+        (decomp.query_decomposition && decomp.query_decomposition.intent) ||
+        asDisplayText(la.intent),
+      query_decomposition: decomp.query_decomposition,
+      decomposition: decomp.decomposition,
+    };
+  }
+
+  function detectiveDiagnosisModel(vm) {
+    vm = vm || {};
+    const d = vm.detective || {};
+    const diag = diagObj(vm);
+    const isDirect = detectiveIsDirectTurn(vm);
+    const v2 = detectiveV2Direct(vm);
+    const la = detectiveLayerA(vm);
+    const prompt = (diag.prompt && typeof diag.prompt === "object" ? diag.prompt : {}) ||
+      (d.prompt && typeof d.prompt === "object" ? d.prompt : {});
+    const slow = diag.slow && typeof diag.slow === "object" ? diag.slow : {};
+    const errors = diag.errors && typeof diag.errors === "object" ? diag.errors : {};
+    const output = diag.output && typeof diag.output === "object" ? diag.output : {};
+    const pipe = diag.pipeline && typeof diag.pipeline === "object" ? diag.pipeline : {};
+    const hops = vm.hops || [];
+    const hopFails = hops.filter((h) => (Number(h.status) || 0) >= 400);
+    const errItems = Array.isArray(errors.items) && errors.items.length
+      ? errors.items
+      : hopFails.map((h) => ({
+          where: "hop",
+          name: h.verb || h.name || "",
+          message: h.error || ("HTTP " + h.status),
+          ms: h.ms,
+        }));
+    const errCount = errors.count != null ? Number(errors.count) : errItems.length;
+    const pipeHop = hops.find((h) => String(h.verb || h.name || "").toLowerCase() === "pipeline");
+    const stepCosts = pipeHop && Array.isArray(pipeHop.step_costs) ? pipeHop.step_costs : [];
+    const pipePresent = !!(pipe.present || pipeHop);
+    const grades = [
+      ["prompt", diag.prompt_grade || vm.prompt_grade],
+      ["speed", diag.speed_grade],
+      ["errors", diag.error_grade],
+      ["output", diag.output_grade],
+      ["pipeline", diag.pipeline_grade],
+    ]
+      .map((p) => ({ id: p[0], value: gradeNorm(p[1]) || String(p[1] || ""), cls: gradeNorm(p[1]) }))
+      .filter((p) => p.cls || p.value);
+
+    const cards = [];
+    const card1Items = [];
+    if (isDirect) {
+      card1Items.push("zeus_client V2 Direct — chat framing N/A");
+      if (v2.path) card1Items.push((v2.method || "POST") + " " + v2.path);
+    } else {
+      card1Items.push("Checklist: " + (prompt.verdict || prompt.checklist_verdict || vm.prompt_grade || "?"));
+      if (prompt.chat_request_base_id || prompt.custom_label) {
+        card1Items.push(
+          "Lineage: " +
+            (prompt.chat_request_base_id || "—") +
+            " · " +
+            (prompt.custom_label || "—")
+        );
+      }
+      const flags = (d.overview && d.overview.catalog_flags) || {};
+      const brief = prompt.has_scope_brief != null ? prompt.has_scope_brief : flags.has_scope_brief;
+      const mini = prompt.has_mini_schema != null ? prompt.has_mini_schema : flags.has_mini_schema;
+      card1Items.push(
+        "SCOPE BRIEF: " + (brief ? "yes" : "no") + " · MINI-SCHEMA: " + (mini ? "yes" : "no")
+      );
+      const toolN = prompt.tool_count != null ? prompt.tool_count : (vm.hops || []).length;
+      card1Items.push(
+        "Tools on wire: " +
+          toolN +
+          (prompt.has_return_verb ? " · return yes" : "") +
+          (prompt.has_pipeline_verb ? " · pipeline yes" : "")
+      );
+    }
+    cards.push({
+      n: 1,
+      title: "1. Good prompt / contract?",
+      grade: isDirect ? "skip" : gradeNorm(diag.prompt_grade || vm.prompt_grade) || "na",
+      items: card1Items,
+      jump: "prompt",
+    });
+
+    const top = detectiveSlowTop(vm);
+    const wall = slow.wall_ms || slow.total_ms || (vm.metrics && vm.metrics.total) || 0;
+    const card2Items = top.map((it) => it.label + " " + it.ms + "ms");
+    cards.push({
+      n: 2,
+      title: "2. What took longest?",
+      grade: gradeNorm(diag.speed_grade || slow.grade) || "na",
+      muted:
+        "wall " +
+        wall +
+        "ms" +
+        (slow.ai_ms_total != null ? " · ai " + Math.round(slow.ai_ms_total) + "ms" : "") +
+        (slow.api_ms_total != null ? " · api " + Math.round(slow.api_ms_total) + "ms" : ""),
+      items: card2Items,
+    });
+
+    cards.push({
+      n: 3,
+      title: "3. Errors?",
+      grade: errCount ? "fail" : gradeNorm(diag.error_grade) || "pass",
+      items: errItems.map((it) =>
+        "[" + (it.where || "") + "] " + (it.name || "") + ": " + (it.message || "")
+      ),
+      muted: errCount ? "" : "No tool / vector / FTS errors recorded.",
+    });
+
+    const card4 = {
+      n: 4,
+      title: "4. Output schema followed?",
+      grade: isDirect ? "skip" : gradeNorm(diag.output_grade || output.grade) || "na",
+      items: [],
+      muted: "",
+    };
+    if (isDirect && v2.isDirect) {
+      card4.items.push("zeus_client V2 Direct · " + (v2.verb || "") + " " + (v2.collection || ""));
+      if (v2.output) {
+        card4.items.push(
+          "V2 envelope · " +
+            (v2.output.slim ? "slim keep (items[] omitted)" : "body retained") +
+            (v2.output.returned != null ? " · returned_count " + v2.output.returned : "")
+        );
+      }
+      card4.muted = "Layer A terminate N/A. zeus_client output is the V2 JSON body.";
+    } else {
+      card4.items.push(
+        "Terminate: " + (la.has_terminate ? "yes via " + (la.terminate_via || "") : "no")
+      );
+      card4.items.push(
+        "summary: " +
+          (la.has_summary ? "yes" : "no") +
+          " · query_decomposition: " +
+          (la.has_query_decomposition ? "yes" : "no") +
+          " · decomposition: " +
+          (la.has_decomposition ? "yes" : "no") +
+          " · confidence: " +
+          (la.has_confidence ? "yes" : "no")
+      );
+      if (la.summary) card4.muted = "summary: " + la.summary;
+    }
+    cards.push(card4);
+
+    const card5 = {
+      n: 5,
+      title: "5. Pipeline / MASQ?",
+      grade: gradeNorm(diag.pipeline_grade || pipe.grade) || (pipePresent ? "pass" : "na"),
+      items: [],
+      muted: pipePresent
+        ? pipe.logic || pipe.masq_note || ""
+        : "No pipeline call this turn. (MASQ budgets multi-verb plans best via pipeline.)",
+    };
+    if (pipePresent) {
+      const steps = Array.isArray(pipe.steps) && pipe.steps.length
+        ? pipe.steps
+        : stepCosts;
+      steps.forEach((st) => {
+        const name = (st && (st.name || st.verb || st.as)) || "";
+        if (name) card5.items.push(String(name) + (st.verb && st.name ? " → " + st.verb : ""));
+      });
+    } else if (isDirect && v2.verb && v2.verb !== "pipeline") {
+      card5.muted =
+        "Single V2 verb " + v2.verb + " (not a pipeline). MASQ multi-verb plans go through pipeline.";
+    }
+    cards.push(card5);
+
+    return {
+      headline: asDisplayText(diag.headline) || asDisplayText(vm.headline) || "Diagnosis",
+      request_kind: isDirect ? "http_api" : String(diag.request_kind || "chat_turn"),
+      request_kind_label: isDirect
+        ? diag.request_kind_label || "HTTP API"
+        : diag.request_kind_label || "Chat turn",
+      grades: grades,
+      slowTop: top,
+      cards: cards,
+      playbooks: detectivePlaybookCards(d),
+      isDirect: isDirect,
+    };
+  }
+
+  function detectivePromptView(vm) {
+    vm = vm || {};
+    const d = vm.detective || {};
+    const prompt = d.prompt && typeof d.prompt === "object" ? d.prompt : {};
+    const checks = Array.isArray(vm.promptChecks)
+      ? vm.promptChecks.map(normalizePromptCheck)
+      : detectivePromptChecks(d);
+    const sum = detectiveCheckSummary(checks);
+    const verdict = gradeNorm(prompt.verdict || vm.prompt_grade) || (sum.tone === "err" ? "fail" : sum.total ? "pass" : "skip");
+    const tiles = checks.filter(promptCheckVisibleOnPromptTab).map(promptTabTile);
+    return {
+      verdict: verdict,
+      summary: asDisplayText(prompt.summary) || sum.label,
+      rounds: prompt.rounds || (vm.llmRounds || []).length || 0,
+      checks: checks,
+      tiles: tiles,
+      checkSummary: sum,
+    };
+  }
+
+  function detectiveSessionModel(vm) {
+    vm = vm || {};
+    const env = detectiveEnvelopeRows(vm);
+    const kv = env.filter((r) =>
+      ["req_id", "session_id", "chat_id", "turn_id", "contract", "scope", "mode"].includes(r.key)
+    );
+    const hops = (vm.hops || []).map((h) => ({
+      req_id: h.req_id || "",
+      verb: h.verb || "",
+      status: h.status,
+      preferred: !!h.preferred,
+    }));
+    return { kv: kv, hops: hops };
+  }
+
 export {
     escapeHtml,
     asDisplayText,
@@ -1322,6 +2074,8 @@ export {
     synthesizeTraceSpans,
     traceWallMs,
     waterfallHTML,
+    timelineSpeedKpis,
+    timelineSpeedKpiHTML,
     tallyToolCalls,
     toolFrequencyChartHTML,
     jsnviewOptions,
@@ -1331,5 +2085,22 @@ export {
     extractGather,
     isMultiAgentTrace,
     extractJobUnits,
+    gradeNorm,
+    hopLooksV2Direct,
+    detectiveIsDirectTurn,
+    detectiveV2Direct,
+    detectivePlaybookCards,
+    detectiveInnerTabs,
+    detectiveNeedsAttention,
+    detectiveDefaultTab,
+    detectiveShellSpec,
+    detectiveEnvelopeRows,
+    detectiveTokenTiles,
+    detectiveCostResultKpis,
+    detectiveSlowTop,
+    detectiveLayerA,
+    detectiveDiagnosisModel,
+    detectivePromptView,
+    detectiveSessionModel,
   };
 

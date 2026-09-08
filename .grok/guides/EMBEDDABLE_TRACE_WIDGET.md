@@ -1,9 +1,9 @@
 # Guide: Embeddable Trace Widget
 
-**Date**: 2026-08-21  
+**Date**: 2026-09-02  
 **Feature**: Single-script Zeus Tracer inspector embeddable in any host page  
 **Status**: Active  
-**Related Plan**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (supersedes stacked-card `WIDGET_UI_REDESIGN.md`)
+**Related Plan**: `.grok/plans/WIDGET_STYLE_HTML_CSS.md`; ingest: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md`; publish: `.grok/plans/PUBLISH_CDN_1_2_3.md`
 
 ## 1. Overview
 - **Purpose**: Inject a floating (or docked) Zeus Tracer inspector into third-party pages via one async script tag.
@@ -15,10 +15,10 @@
 1. Host sets `window.ZeusTraceConfig` (optional) and loads the bundle.
 2. `bootstrap.js` queues early API calls, resolves **enabled** (explicit config → `?debug=` → default false).
 3. If **disabled**: install no-op APIs, no DOM, resolve `ZeusTrace.ready`.
-4. If **enabled**: mounts Shadow DOM on `#zeus-trace-host` (overlay) or `mountSelector` (docked). **No DaisyUI.**
+4. If **enabled**: mounts Shadow DOM on `#zeus-trace-host` (overlay) or `mountSelector` (docked). Injects DaisyUI **4.12.10** `full.min.css` into the shadow (not the host). Default `data-theme="light"`.
 5. tool-order is applied from injected `toolOrder` when present; otherwise a **background** fetch of `/api/tool-order` runs (default 3s abort) and never blocks mount.
 6. Host calls `appendTraceCard(question, responseJson)` after each search (`trace` or `debug` required).
-7. `normalize.js` builds a turn view-model; `panel.js` renders list + tabs (Timeline, Hops, LLM I/O, Inject, Detective, Raw). Diagnosis strip auto-opens Detective when grade ≠ pass or hop ≥ 400. Hops `Bytes` is filled from hop size fields, matching tool-step `bytes`, or UTF-8 of `result_json` / `res` / `snippet` (`result_size` is a row count, not bytes).
+7. `normalize.js` builds a turn view-model; `panel.js` renders a turn (or unit) **dropdown** above tabs Overview, Diagnosis, Prompt, Timeline, Tools, Session, Raw. Title is **Turn traces** (job: **Job traces**). Diagnosis strip auto-opens **Diagnosis** when grade ≠ pass or hop ≥ 400. Hub Detective is a header `btn-primary`. Hops `Bytes` is filled from hop size fields, matching tool-step `bytes`, or UTF-8 of `result_json` / `res` / `snippet` (`result_size` is a row count, not bytes). Chrome spec: `.grok/guides/STYLE_HTML_CSS.md`.
 8. Overlay chrome: lightning toggle, close, version footer. Docked chrome hides toggle/close and fills the slot.
 
 **Key components**:
@@ -29,8 +29,9 @@
 - `src/helpers.js` — waterfall, hops, detective formatters
 - `src/config.js` — `zeusApiUrl` / `hubBaseUrl` / `enabled` / `mount` / `mountSelector`
 - `src/jsnview-loader.js` — lazy CDN load for JSON viewer
-- `src/widget.html` / `src/widget.css` — overlay + `.tt-*` inspector
-- `sketches/v1-overlay-inspector/` — locked visual mockup
+- `src/widget.html` / `src/widget.css` — overlay + DaisyUI inspector
+- `.grok/guides/STYLE_HTML_CSS.md` — chrome spec
+- `sketches/v1-overlay-inspector/` — superseded v1 IA mockup
 
 **Enabled resolution** (first decisive wins):
 1. `ZeusTraceConfig.enabled` or script `data-enabled` (`true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`)
@@ -166,10 +167,10 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - Via text shows source path (e.g. `structured_response.layer_a`)
 
 **Panel header**:
-- Title always `Zeus Tracer` (session id available as `title` tooltip when known)
-- **Detective** (blue text after middle-dot) enabled only when both `hubBaseUrl` and a resolved session id are set
-- Latest successful card with a session id wins; cards without a session id do not clear the previous Detective link
-- **Copy All** is a primary blue button; close is a ghost icon button
+- Title is **Turn traces** (job mode: **Job traces**). Lightning toggle `aria-label` stays “Toggle Zeus Tracer”.
+- Idle header is title + overlay close. Turn count, Export, Copy all, Detective appear after a turn exists.
+- **Detective** is `btn-primary` (Heroicon external-link); opens Hub when `hubBaseUrl` and a req/session id are set
+- **Copy all** / Export are `btn-ghost`; overlay close is `btn-ghost` outside `.tt-hdr-actions`
 
 ## 5. Debugging & Known Issues
 
@@ -189,7 +190,8 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 | Click-to-copy / Copy does nothing | `clipboard.writeText` rejected in Shadow DOM; toast was off-panel | Rebuild; copy uses sync `execCommand` first; toast lives inside `#tt-panel`. See `.grok/guides/CLICK_TO_COPY.md` |
 | JSON dumps show plain pre | jsnview CDN blocked | Allow cdn.jsdelivr.net; pre fallback is expected and still shows data |
 | Early calls lost | Script not async-safe | Use built-in queue (calls before load are buffered) |
-| Styles missing | Stale 0.1.x bundle or blocked shadow | Rebuild v1.0.0 (no DaisyUI); inspect `#zeus-trace-host` shadow root |
+| Styles missing / unstyled DaisyUI | Stale bundle, blocked jsdelivr, or inspecting host CSS | Rebuild; shadow root must contain daisyui@4.12.10 `<link>`; CSP must allow cdn.jsdelivr.net |
+| Turn dropdown hides behind Overview…Raw tabs | Markup `z-20` / `z-[50]` are not in shadow DaisyUI CSS; `.tab { position: relative }` paints later | Rebuild; `widget.css` sets picker `z-index: 20`, menu `50`, tabs `0` |
 | KPI tiles / Layer A labels overlap; huge floating numbers | Flex column + `min-height:0` collapsed `.tc-kpi-mini` to 0 while tiles overflow | v0.1.12+ layout lock (`flex-shrink:0` on card/body children; KPI `min-height:auto`) — rebuild/redeploy bundle |
 
 **Debug checklist**:
@@ -203,7 +205,8 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - [ ] Card head click collapses/expands body (`aria-expanded`, `.is-collapsed`); chevron visible
 - [ ] Under card head body: KPI tile grid shows MINI-SCHEMA / SCOPE BRIEF / LLM Rounds / Tool Calls / Avg / round / Edges
 - [ ] When terminate bag present: **Layer A** primary pills + code blocks for query_decomposition / decomposition; no Summary row
-- [ ] Panel title is `Zeus Tracer`
+- [ ] Panel title is `Turn traces` (job: `Job traces`)
+- [ ] Shadow root has DaisyUI 4.12.10 and `data-theme="light"`
 - [ ] Detective link href is `{hubBaseUrl}/hub/debug/session/{session_id}` and opens in a new tab
 
 ## 6. Related Artifacts
@@ -212,12 +215,19 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 - **Tickets**:
   - [ZC-31](https://kotenai.atlassian.net/browse/ZC-31) — embeddable widget
   - [ZC-43](https://kotenai.atlassian.net/browse/ZC-43) — original request-id Detective link (superseded path by session link)
-- **Plans**: `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (current); older stacked-card plans superseded
+- **Plans**: `.grok/plans/WIDGET_STYLE_HTML_CSS.md` (chrome); `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (ingest)
 
 ## 7. Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-09-08 | Grok | Package **1.2.3**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.3` (Turn traces UI detail: copy-id, nested diagnosis cards, shadow layout) |
+| 2026-09-04 | Grok | Package **1.2.2**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.2` (active-row stacking + title inset) |
+| 2026-09-03 | Grok | Open turn dropdown stacks above the tab strip (`widget.css` z-index, not HTML `z-[50]`) |
+| 2026-09-03 | Grok | Package **1.2.1**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.1` |
+| 2026-09-03 | Grok | Turn picker is a DaisyUI dropdown above tabs (sketch 009); left-pane search/filter rail removed |
+| 2026-09-02 | Grok | Package **1.2.0**; pin into sibling `demo_travel_sample` (`/static/zeus_client_chat_trace.js?v=1.2.0`) |
+| 2026-09-02 | Grok | DaisyUI 4.12 light Detective IA in Shadow DOM; title **Turn traces**; tabs Overview→Raw; chrome spec `STYLE_HTML_CSS.md` |
 | 2026-08-26 | Grok | Detective / Hub redirects use live `hubBaseUrl` from config; `http://hub` hostname no longer mangled; optional `.env` `HUB_BASE_URL` |
 | 2026-08-26 | Grok | Package / CDN version **1.1.1** (versioned + `latest`) |
 | 2026-08-25 | Grok | Hops `Bytes` column: aliases + matching step + payload estimate (2.3.0 hops omit `bytes`) |

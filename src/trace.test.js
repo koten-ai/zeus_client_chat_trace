@@ -82,6 +82,8 @@ describe("initZeusTrace", () => {
     const item = root.querySelector(".tt-turn-item");
     expect(item).not.toBeNull();
     expect(item.textContent).toContain("Find hotels in Paris");
+    expect(root.querySelector("#tt-pick-q").textContent).toContain("Find hotels in Paris");
+    expect(root.querySelector("#tt-turn-dropdown")).not.toBeNull();
     expect(root.querySelector(".trace-waterfall")).not.toBeNull();
     expect(root.querySelector("#tt-turn-count").textContent).toMatch(/1 turn/);
   });
@@ -104,7 +106,7 @@ describe("initZeusTrace", () => {
     expect(root.querySelector("#debug-panel").classList.contains("is-hidden")).toBe(false);
   });
 
-  it("shows diagnosis strip and prefers Detective tab on warn", () => {
+  it("shows diagnosis strip and prefers Diagnosis tab on warn", () => {
     const api = initZeusTrace(root, { zeusApiUrl: "", zeusAuthToken: "" });
     api.appendTraceCard(
       "failed hop",
@@ -121,7 +123,7 @@ describe("initZeusTrace", () => {
     const diag = root.querySelector("#tt-diagnosis");
     expect(diag.hidden).toBe(false);
     expect(diag.textContent).toMatch(/0-row hop/);
-    expect(root.querySelector('[data-tab="detective"]').classList.contains("on")).toBe(true);
+    expect(root.querySelector('[data-tab="diagnosis"]').classList.contains("on")).toBe(true);
   });
 
   it("renders session bar with contract and semantic cache", () => {
@@ -218,8 +220,8 @@ describe("initZeusTrace", () => {
         public_trace: { rounds: 1, steps: [] },
       },
     });
-    root.querySelector('[data-tab="hops"]').click();
-    const bytesCell = root.querySelector("#tt-panel-hops tbody tr td:nth-child(5)");
+    root.querySelector('[data-tab="tools"]').click();
+    const bytesCell = root.querySelector("#tt-tools-hops tbody tr td:nth-child(5)");
     expect(bytesCell).not.toBeNull();
     expect(bytesCell.textContent.trim()).not.toBe("—");
     expect(bytesCell.textContent).toMatch(/B$/);
@@ -233,8 +235,8 @@ describe("initZeusTrace", () => {
         steps: [{ type: "tool", name: "search", status: 200, ms: 240, bytes: 4096 }],
       },
     });
-    root.querySelector('[data-tab="hops"]').click();
-    const bytesCell = root.querySelector("#tt-panel-hops tbody tr td:nth-child(5)");
+    root.querySelector('[data-tab="tools"]').click();
+    const bytesCell = root.querySelector("#tt-tools-hops tbody tr td:nth-child(5)");
     expect(bytesCell.textContent.trim()).toBe("4.0kB");
   });
 
@@ -270,7 +272,8 @@ describe("initZeusTrace", () => {
         units: [{ unit_id: "u1", status: "ok", kind: "agent_turn", goal: "plan trip", req_ids: ["a"] }],
       },
     });
-    expect(root.querySelector(".tt-title").textContent).toMatch(/Job traces|Zeus Tracer/);
+    expect(root.querySelector(".tt-title").textContent).toBe("Job traces");
+    expect(root.querySelector("#tt-turn-picker-label").textContent).toBe("Unit");
     expect(root.querySelector(".tt-turn-item").textContent).toMatch(/u1|plan trip/);
   });
 
@@ -301,7 +304,7 @@ describe("initZeusTrace", () => {
     );
   });
 
-  it("Open in Hub and Detective tab links use hubBaseUrl from config", () => {
+  it("Open in Hub and Session tab links use hubBaseUrl from config", () => {
     const hub = "http://from-config.local:9091";
     const api = initZeusTrace(root, { zeusApiUrl: "", hubBaseUrl: hub });
     api.appendTraceCard(
@@ -316,7 +319,7 @@ describe("initZeusTrace", () => {
       })
     );
 
-    root.querySelector('[data-tab="hops"]').click();
+    root.querySelector('[data-tab="tools"]').click();
     root.querySelector('[data-action="open-req"]').click();
     expect(window.open).toHaveBeenCalledWith(
       `${hub}/hub/#/debug/req/req-tab`,
@@ -324,10 +327,9 @@ describe("initZeusTrace", () => {
       "noopener,noreferrer"
     );
 
-    root.querySelector('[data-tab="detective"]').click();
-    const session = root.querySelector('[data-action="hub-session"]');
-    const req = root.querySelector('[data-action="hub-req"]');
-    expect(session.getAttribute("href")).toBe(`${hub}/hub/debug/session/sess-tab`);
+    root.querySelector('[data-tab="diagnosis"]').click();
+    const req = root.querySelector("#tt-panel-diagnosis [data-action=\"hub-req\"]");
+    expect(req).not.toBeNull();
     expect(req.getAttribute("href")).toBe(`${hub}/hub/#/debug/req/req-tab`);
   });
 
