@@ -38,7 +38,7 @@
   1. Load the bundle with `enabled: true` or `?debug=true`
   2. After each Zeus turn, `appendTraceCard(question, { ...response, trace | debug })`
   3. Inspect Overview / Diagnosis / Prompt / Timeline / Tools / Session / Raw
-- **Examples**: `dev/index.html` (full-page playground); `examples/embed.html` (host embed; legacy, v2.3.0, fail, cache, job); `../demo_travel_sample` vendors **1.2.3** (`scripts/vendor_trace.sh`)
+- **Examples**: `dev/index.html` (full-page playground); `examples/embed.html` (host embed; legacy, v2.3.0, fail, cache, job). A host may vendor `dist/zeus_client_chat_trace.js`.
 - **Edge cases**: Missing spans are synthesized from hops/steps; job traces switch the list to units
 - **Limitations**: Shadow internals are not a public API (breaking at 1.0.0 vs 0.1.x cards). Job UI is display-only (`multi_agent=docs`).
 
@@ -86,11 +86,11 @@
 | 2026-09-04 | Grok | Active turn row `position: relative; z-index: 100000`; header padding `8px 12px` + title `margin-left: 8px` (shadow has no Tailwind `px-*` / `ml-*`) |
 | 2026-09-03 | Grok | Turn dropdown `z-index` in `widget.css` so the open list paints above the tab strip |
 | 2026-09-03 | Grok | Package **1.2.1** (turn dropdown); CDN `…/1.2.1/` + `latest`; pin TravelPlan `/static/?v=1.2.1` |
-| 2026-09-02 | Grok | Package **1.2.0**; pin into `demo_travel_sample` `/static/zeus_client_chat_trace.js?v=1.2.0` |
+| 2026-09-02 | Grok | Package **1.2.0**; pin into `the sample host` `/static/zeus_client_chat_trace.js?v=1.2.0` |
 | 2026-09-02 | Grok | Light DaisyUI Detective IA in Shadow DOM; title Turn traces; tabs Overview→Raw |
 | 2026-08-25 | Grok | Hops `Bytes`: resolve aliases, matching tool-step `bytes`, or UTF-8 of `result_json`/`res`/`snippet` (never `result_size`) |
 | 2026-08-25 | Grok | Raw tab jsnview uses inspector `--tt-mono` 11px (same as Hops/LLM dumps) |
-| 2026-08-25 | Grok | Pin 1.0.0 into sibling `demo_travel_sample` (`/static/zeus_client_chat_trace.js?v=1.0.0`) |
+| 2026-08-25 | Grok | Pin 1.0.0 into sibling `the sample host` (`/static/zeus_client_chat_trace.js?v=1.0.0`) |
 | 2026-08-25 | Grok | Fix tracer UI: close unclosed `.vbar-col .n` (CSS nesting hid all `.tt-*` rules); restore vbar labels; `display:block` after `all: initial` |
 | 2026-08-25 | Grok | Local playground: `npm start` → http://localhost:5199/ |
 | 2026-08-25 | Grok | Click-to-copy: delegated `data-copy` / `data-copy-from`, sync clipboard fallback, toast inside the panel |

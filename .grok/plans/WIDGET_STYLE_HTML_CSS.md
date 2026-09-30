@@ -24,7 +24,7 @@
 - **Out of Scope**:
   - Chat, Catalog, Settings, split-pane / `.zeus-stage-001` (not in this repo).
   - Host-page theme toggle / `ZeusTraceConfig.theme` (default light only).
-  - CDN publish / vendoring into `demo_travel_sample`.
+  - CDN publish / vendoring into `the sample host`.
   - Playwright visual-regression CI.
   - Purged/bundled DaisyUI CSS (first cut uses the pinned jsdelivr link; size follow-up if needed).
   - Changing `appendTraceCard` payload shape or Python projectors.
@@ -32,11 +32,11 @@
 ## 2. Analysis & Research
 
 - Key files explored:
-  - `../zeus_client/.grok/guides/STYLE_HTML_CSS.md` (source spec)
-  - `../zeus_client/templates/index.html` (`#tt-panel` markup + tab IA)
-  - `../zeus_client/static/trace_panel.js` (`renderDetOverview` / Diagnosis / Prompt / Session / `renderTools`)
-  - `../zeus_client/static/trace_helpers.js` (`detectiveEnvelopeRows`, `detectiveDiagnosisModel`, `detectiveCostResultKpis`, `timelineSpeedKpiHTML`, `detectiveInnerTabs`)
-  - `../zeus_client/tests/test_trace_style_guide.py` (chrome contract to port as vitest)
+  - `.grok/guides/STYLE_HTML_CSS.md` (source spec)
+  - `templates/index.html` (`#tt-panel` markup + tab IA)
+  - `static/trace_panel.js` (`renderDetOverview` / Diagnosis / Prompt / Session / `renderTools`)
+  - `static/trace_helpers.js` (`detectiveEnvelopeRows`, `detectiveDiagnosisModel`, `detectiveCostResultKpis`, `timelineSpeedKpiHTML`, `detectiveInnerTabs`)
+  - `tests/test_trace_style_guide.py` (chrome contract to port as vitest)
   - `src/widget.html`, `src/widget.css`, `src/bootstrap.js`, `src/panel.js`, `src/helpers.js`
   - `src/widget.css.test.js`, `src/trace.test.js`, `src/panel.copy.test.js`
   - `.grok/guides/EMBEDDABLE_TRACE_WIDGET.md`, `.grok/guides/V1_INSPECTOR.md`

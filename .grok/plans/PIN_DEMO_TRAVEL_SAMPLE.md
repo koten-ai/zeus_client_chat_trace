@@ -1,4 +1,4 @@
-# Plan: Pin Widget 1.2.0 into demo_travel_sample
+# Plan: Pin Widget 1.2.0 into the sample host
 
 **Date**: 2026-09-02
 **Status**: Superseded by `.grok/plans/PUBLISH_CDN_1_2_3.md` (current pin **1.2.3**)
@@ -9,15 +9,15 @@
 ## 1. Context & Requirements
 - **Goal**: TravelPlan serves this repo’s **1.2.0** inspector from `/static/zeus_client_chat_trace.js?v=1.2.0`. Footer reports `v1.2.0`. Index does **not** load CDN `latest`.
 - **Constraints**: Do not require CDN publish. Keep embed API (`appendTraceCard` / `?debug=true`). Public JS API unchanged from 1.1.1.
-- **Assumptions**: `../demo_travel_sample` exists beside this repo. Style restyle is complete (`.grok/plans/WIDGET_STYLE_HTML_CSS.md`).
+- **Assumptions**: A sample host app exists beside this repo. Style restyle is complete (`.grok/plans/WIDGET_STYLE_HTML_CSS.md`).
 - **Out of Scope**: Publishing Spaces, changing TravelPlan BFF / `appendTraceCard` contract.
 
 ## 2. Analysis & Research
 - Key files explored:
   - `package.json` (was 1.1.1; STYLE plan called for **1.2.0** at ship)
-  - `../demo_travel_sample/scripts/vendor_trace.sh`
-  - `../demo_travel_sample/src/travel_planner/templates/index.html` (currently CDN `latest` despite docs)
-  - `../demo_travel_sample/.grok/guides/PINNED_TRACE_WIDGET.md` (still 1.0.0)
+  - `scripts/vendor_trace.sh`
+  - `src/templates/index.html` (currently CDN `latest` despite docs)
+  - `.grok/guides/PINNED_TRACE_WIDGET.md` (still 1.0.0)
 - Potential risks/edge cases:
   - Pinning as 1.1.1 would collide with the already-published dark inspector → Mitigation: bump to **1.2.0**
   - Index still on CDN `latest` would ignore the vendor copy → Mitigation: script src `/static/…?v=1.2.0`
@@ -32,13 +32,13 @@
    - Tests needed: [ ] `npm test` still green
 
 2. **Build + copy**
-   - Files to change: `../demo_travel_sample/src/travel_planner/static/zeus_client_chat_trace.js`, `.map`
+   - Files to change: `src/static/zeus_client_chat_trace.js`, `.map`
    - Changes: rebuild sibling dist; copy via vendor script
-   - Commands to run: `../demo_travel_sample/scripts/vendor_trace.sh`
+   - Commands to run: `scripts/vendor_trace.sh`
    - Tests needed: [ ] vendored file contains `1.2.0` and `data-tab="overview"`
 
 3. **Demo HTML pin**
-   - Files to change: `../demo_travel_sample/src/travel_planner/templates/index.html`
+   - Files to change: `src/templates/index.html`
    - Changes: `/static/zeus_client_chat_trace.js?v=1.2.0` (drop CDN latest)
    - Tests needed: [ ]
 

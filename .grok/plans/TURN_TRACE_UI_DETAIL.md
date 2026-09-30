@@ -13,9 +13,9 @@
 
 ## 2. Analysis & Research
 - Key files explored:
-  - `../zeus_client/static/trace_panel.js` (`copyValueRow`, `diagNestedCardHTML`, `renderDetOverview` / Diagnosis / Prompt / Tools / Session / Raw)
-  - `../zeus_client/static/app.css` (`.det-env`, `.tt-copy-id`, no `.det-diag-card {` chrome, `.pcl`, `.env-kpi`)
-  - `../zeus_client/tests/test_trace_style_guide.py` (`test_envelope_ids_are_value_plus_copy_icon`, `test_diagnosis_items_are_nested_daisyui_cards`)
+  - `static/trace_panel.js` (`copyValueRow`, `diagNestedCardHTML`, `renderDetOverview` / Diagnosis / Prompt / Tools / Session / Raw)
+  - `static/app.css` (`.det-env`, `.tt-copy-id`, no `.det-diag-card {` chrome, `.pcl`, `.env-kpi`)
+  - `tests/test_trace_style_guide.py` (`test_envelope_ids_are_value_plus_copy_icon`, `test_diagnosis_items_are_nested_daisyui_cards`)
   - `src/panel.js`, `src/widget.css`, `src/panel.copy.test.js`, `src/style_guide.test.js`
 - Potential risks/edge cases:
   - DaisyUI `.stat-value` is **2.25rem** — Tools KPIs look huge without Tailwind `text-xl` → Mitigation: override `.tt-panel .kpi-val` / `.stat-value.kpi-val`

@@ -12,7 +12,7 @@
 - **Out of Scope**: Search/filter inside the dropdown (dropped with the rail). CDN publish. Chat split-pane CSS.
 
 ## 2. Analysis & Research
-- Key files: `../zeus_client/.grok/guides/STYLE_HTML_CSS.md`, `../zeus_client/static/trace_panel.js`, `src/widget.html`, `src/widget.css`, `src/panel.js`, `src/style_guide.test.js`
+- Key files: `.grok/guides/STYLE_HTML_CSS.md`, `static/trace_panel.js`, `src/widget.html`, `src/widget.css`, `src/panel.js`, `src/style_guide.test.js`
 - Risks:
   - Overlay `overflow: hidden` clips the menu → Mitigation: match sample `overflow-visible` on `.tt-detail`; absolute `.dropdown-content`; `z-20` on picker
   - Tests still expect `#tt-search` / 2-col `.tt-body` grid → Mitigation: rewrite chrome contract

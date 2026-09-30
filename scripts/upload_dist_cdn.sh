@@ -16,10 +16,10 @@
 #   - DO Spaces credentials (DO_SPACES_KEY / DO_SPACES_SECRET)
 #   - Optional DIGITALOCEAN_TOKEN (or doctl auth) to create/list CDN endpoints
 #
-# Env (optional overrides):
+# Env:
 #   DO_SPACES_KEY / DO_SPACES_SECRET     required
-#   DO_SPACES_STATIC_BUCKET              default: koten-static-cdn
-#   DO_SPACES_STATIC_REGION              default: nyc3
+#   DO_SPACES_STATIC_BUCKET              required (no default)
+#   DO_SPACES_STATIC_REGION              required (no default)
 #   DO_SPACES_STATIC_ENDPOINT            default: https://<region>.digitaloceanspaces.com
 #   DO_SPACES_STATIC_PREFIX              default: zeus_client_chat_trace
 #   TRACE_VERSION                        default: package.json version
@@ -28,11 +28,8 @@
 #   DRY_RUN=1                            print plan only
 #   UPLOAD_SOURCEMAPS=1                  default on; set 0 to skip .map
 #
-# Credential load order:
-#   1) already-exported env
-#   2) $SPACES_ENV_FILE
-#   3) <repo>/.secrets/spaces-static.env
-#   4) ../koten_remote_deployment/.env
+# Loads <repo>/.env (same file as the widget build). A non-empty shell
+# export overrides the same name in .env.
 #
 # Example:
 #   ./scripts/upload_dist_cdn.sh
@@ -41,26 +38,37 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Apply KEY=VALUE from a dotenv file without overriding a non-empty shell export.
 load_env_file() {
-  local f="$1"
+  local f="$1" line key val
   [[ -f "$f" ]] || return 0
-  set -a
-  # shellcheck disable=SC1090
-  source "$f"
-  set +a
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == export\ * ]] && line="${line#export }"
+    key="${line%%=*}"
+    [[ "$line" == *"="* && "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    val="${line#*=}"
+    if [[ "$val" == \"*\" && "$val" == *\" ]]; then
+      val="${val:1:${#val}-2}"
+    elif [[ "$val" == \'*\' && "$val" == *\' ]]; then
+      val="${val:1:${#val}-2}"
+    fi
+    if [[ -z "${!key:-}" ]]; then
+      export "$key=$val"
+    fi
+  done < "$f"
 }
 
-if [[ -n "${SPACES_ENV_FILE:-}" ]]; then
-  load_env_file "$SPACES_ENV_FILE"
-fi
-load_env_file "$ROOT/.secrets/spaces-static.env"
-load_env_file "$ROOT/../koten_remote_deployment/.env"
+load_env_file "$ROOT/.env"
 
-: "${DO_SPACES_KEY:?Set DO_SPACES_KEY (or put it in .secrets/spaces-static.env)}"
-: "${DO_SPACES_SECRET:?Set DO_SPACES_SECRET}"
+: "${DO_SPACES_KEY:?Set DO_SPACES_KEY in .env}"
+: "${DO_SPACES_SECRET:?Set DO_SPACES_SECRET in .env}"
+: "${DO_SPACES_STATIC_BUCKET:?Set DO_SPACES_STATIC_BUCKET in .env}"
+: "${DO_SPACES_STATIC_REGION:?Set DO_SPACES_STATIC_REGION in .env}"
 
-BUCKET="${DO_SPACES_STATIC_BUCKET:-koten-static-cdn}"
-REGION="${DO_SPACES_STATIC_REGION:-${DO_SPACES_REGION:-nyc3}}"
+BUCKET="${DO_SPACES_STATIC_BUCKET}"
+REGION="${DO_SPACES_STATIC_REGION}"
 ENDPOINT="${DO_SPACES_STATIC_ENDPOINT:-https://${REGION}.digitaloceanspaces.com}"
 PREFIX="${DO_SPACES_STATIC_PREFIX:-zeus_client_chat_trace}"
 PREFIX="${PREFIX#/}"
@@ -152,7 +160,7 @@ def ensure_bucket() -> None:
         "Bucket": bucket,
         "ACL": "private",  # objects are public-read; bucket listing stays private
     }
-    # nyc3 and most DO regions want LocationConstraint == region; some reject us-east-1 style.
+    # Most regions want LocationConstraint == region; us-east-1 does not.
     if region and region != "us-east-1":
         params["CreateBucketConfiguration"] = {"LocationConstraint": region}
     try:
@@ -233,7 +241,7 @@ CDN_ENDPOINT_ID=""
 if [[ "$SKIP_CDN" != "1" ]]; then
   ensure_cdn() {
     local origin="https://${ORIGIN_HOST}"
-    # Prefer DIGITALOCEAN_TOKEN from env / remote .env; doctl context as fallback
+    # Prefer DIGITALOCEAN_TOKEN from .env; doctl context as fallback
     if [[ -z "${DIGITALOCEAN_TOKEN:-}" ]] && command -v doctl >/dev/null 2>&1; then
       DIGITALOCEAN_TOKEN="$(doctl auth token 2>/dev/null || true)"
     fi

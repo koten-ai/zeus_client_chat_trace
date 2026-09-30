@@ -8,8 +8,8 @@
 ## 1. Context & Requirements
 - **Goal**: Public CDN serves the click-to-copy fix. Versioned URL is new (`1.0.1`); `latest` pointer is updated and purged.
 - **Constraints**: `1.0.0` is already published with `Cache-Control: public, max-age=31536000, immutable`. Do not overwrite that key as the only ship path.
-- **Assumptions**: `.secrets/spaces-static.env` has `DO_SPACES_KEY` / `DO_SPACES_SECRET`. Production build is minified (`npm run build`), not the playground watch bundle.
-- **Out of Scope**: Git tag/release, vendoring into `demo_travel_sample`, npm registry.
+- **Assumptions**: `.env` has `DO_SPACES_KEY` / `DO_SPACES_SECRET`. Production build is minified (`npm run build`), not the playground watch bundle.
+- **Out of Scope**: Git tag/release, vendoring into `the sample host`, npm registry.
 
 ## 2. Analysis & Research
 - Key files explored: `scripts/upload_dist_cdn.sh`, `package.json`, `.secrets/cdn-urls.env` (currently `TRACE_CDN_VERSION=1.0.0`)

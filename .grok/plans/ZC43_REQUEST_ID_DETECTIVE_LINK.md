@@ -4,7 +4,7 @@
 **Task**: Show the latest Zeus request ID in the debugger panel title and deep-link to Hub Detective in a new tab.  
 **Priority**: Medium  
 **Estimated Effort**: ~2–3 hours / 8 steps  
-**Jira**: [ZC-43](https://kotenai.atlassian.net/browse/ZC-43)  
+**Jira**: ZC-43  
 **Status**: Plan only (no implementation in this step)
 
 ## 1. Context & Requirements

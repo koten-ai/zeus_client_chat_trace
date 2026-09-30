@@ -1,5 +1,5 @@
 /**
- * Shared Turn-trace helpers (ported from zeus_client/static/trace_helpers.js).
+ * Shared Turn-trace helpers.
  */
 import { loadJsnview } from "./jsnview-loader.js";
 import {

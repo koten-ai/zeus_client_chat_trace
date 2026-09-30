@@ -131,7 +131,7 @@ User query
 
 See `examples/embed.html` for a working host that queues an early trace, then appends fixture data on button click.
 
-Sibling **TravelPlan** (`../demo_travel_sample`) vendors this package at **1.2.3** (`/static/zeus_client_chat_trace.js?v=1.2.3`). Refresh that pin with `../demo_travel_sample/scripts/vendor_trace.sh`. CDN: `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/1.2.3/zeus_client_chat_trace.js`.
+A host can vendor `dist/zeus_client_chat_trace.js` and pin the script URL with a query string such as `?v=1.2.3`.
 
 ## Prerequisites
 
@@ -151,37 +151,48 @@ npm run build
 
 This produces `dist/zeus_client_chat_trace.js` (minified, with source map).
 
+### Environment (`.env`)
+
+Widget build defaults and CDN publish credentials live in one gitignored file. Copy the sample and fill in what you need:
+
+```bash
+cp .env.example .env
+```
+
+`npm run build` and `npm start` read `.env` through `esbuild.config.mjs`. They inline only `ZEUS_API_URL`, `ZEUS_AUTH_TOKEN`, and `HUB_BASE_URL`. `npm run publish:cdn` reads the `DO_SPACES_*` variables and `DIGITALOCEAN_TOKEN` from the same file and does not put them in the bundle. A non-empty shell export overrides the same name in `.env`. After the page loads, `window.ZeusTraceConfig` and script `data-*` attributes override the three inlined widget values.
+
+| Variable | Required | Used by | Description |
+|----------|----------|---------|-------------|
+| `ZEUS_API_URL` | No | build | Default Zeus API base URL (for example `http://localhost:8080`). |
+| `ZEUS_AUTH_TOKEN` | No | build | Default Bearer token for Zeus API requests. Inlined when set. |
+| `HUB_BASE_URL` | No | build | Default Hub / Detective origin (for example `http://127.0.0.1:9091`). Leave empty for a CDN build so each host sets `hubBaseUrl`. |
+| `DO_SPACES_KEY` | To publish | `publish:cdn` | Spaces access key. |
+| `DO_SPACES_SECRET` | To publish | `publish:cdn` | Spaces secret. |
+| `DO_SPACES_STATIC_BUCKET` | To publish | `publish:cdn` | Destination Space. No default. |
+| `DO_SPACES_STATIC_REGION` | To publish | `publish:cdn` | Space region. No default. |
+| `DO_SPACES_STATIC_ENDPOINT` | No | `publish:cdn` | API endpoint. Default `https://<region>.digitaloceanspaces.com`. |
+| `DO_SPACES_STATIC_PREFIX` | No | `publish:cdn` | Object key prefix. Default `zeus_client_chat_trace`. |
+| `DIGITALOCEAN_TOKEN` | No | `publish:cdn` | Creates or reuses the CDN endpoint. `doctl` auth is used when this is empty. |
+
+A successful publish writes `.secrets/cdn-urls.env` (the versioned and `latest` URLs). That file is output, not configuration, and it is gitignored.
+
 ### Publish to CDN (DigitalOcean Spaces)
 
-Versioned public CDN for the built bundle (Space `koten-static-cdn`, region `nyc3`):
+Set the four required `DO_SPACES_*` variables in `.env`, then:
 
 ```bash
 npm run build
 npm run publish:cdn   # scripts/upload_dist_cdn.sh
 ```
 
-Uploads both a **semver path** (immutable cache) and a **`latest`** pointer (short cache):
+The script uploads a **semver path** (immutable cache) and a **`latest`** pointer (short cache):
 
 | URL | Cache |
 |-----|--------|
-| `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js` | 1y immutable |
-| `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/latest/zeus_client_chat_trace.js` | 60s |
+| `https://<cdn-host>/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js` | 1y immutable |
+| `https://<cdn-host>/zeus_client_chat_trace/latest/zeus_client_chat_trace.js` | 60s |
 
-Credentials: `DO_SPACES_KEY` / `DO_SPACES_SECRET` (see `.secrets/spaces-static.env`, gitignored). Optional `DIGITALOCEAN_TOKEN` creates/ensures the CDN endpoint. Origin (non-CDN) URLs use the same host without `.cdn.`.
-
-**Optional — build-time defaults:** Copy `.env.example` to `.env` and set defaults that apply when no runtime config is provided:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description |
-|----------|-------------|
-| `ZEUS_API_URL` | Default Zeus API base URL (e.g. `http://localhost:8080`) |
-| `ZEUS_AUTH_TOKEN` | Default Bearer token for Zeus API requests |
-| `HUB_BASE_URL` | Default Hub / Detective origin (e.g. `http://127.0.0.1:9091`). Leave empty for CDN builds. |
-
-Runtime config always overrides these build-time values.
+The CDN host is `<bucket>.<region>.cdn.digitaloceanspaces.com`. Origin URLs use the same host without `.cdn.`.
 
 ### 2. Embed in your host page
 
@@ -192,7 +203,7 @@ Add configuration and the script tag to any HTML page:
   window.ZeusTraceConfig = {
     zeusApiUrl: "https://zeus.example.com",
     zeusAuthToken: "optional-bearer-token",
-    hubBaseUrl: "http://zeus-dev.local:9091",
+    hubBaseUrl: "http://hub.example:9091",
     // Optional hard enable. Omit and use ?debug=true on the page instead.
     // enabled: true,
   };
@@ -208,7 +219,7 @@ Alternatively, pass config via data attributes on the script tag:
   async
   data-zeus-api-url="https://zeus.example.com"
   data-zeus-auth-token="optional-bearer-token"
-  data-hub-base-url="http://zeus-dev.local:9091"
+  data-hub-base-url="http://hub.example:9091"
   data-enabled="true"
 ></script>
 ```
@@ -243,7 +254,7 @@ Hostname `http://hub` is a valid origin (it is not treated as a `/hub` path). Wh
    ```js
    window.ZeusTraceConfig = {
      ...(window.ZeusTraceConfig || {}),
-     hubBaseUrl: "http://127.0.0.1:9091", // or http://zeus-dev.local:9091
+     hubBaseUrl: "http://127.0.0.1:9091", // or http://hub.example:9091
    };
    ```
 
@@ -259,7 +270,7 @@ Hostname `http://hub` is a valid origin (it is not treated as a `/hub` path). Wh
 
    (`data-hub-base-url` → `dataset.hubBaseUrl`. Trailing slashes are stripped.)
 
-3. **Optional `.env` `HUB_BASE_URL`:** used only when runtime config and `data-hub-base-url` are empty. Prefer runtime config for hosts; leave `HUB_BASE_URL` empty when publishing the CDN bundle.
+3. **Optional `.env` `HUB_BASE_URL`:** build-time fallback, used only when runtime config and `data-hub-base-url` are empty. See [Environment](#environment-env). Leave it empty when publishing the CDN bundle.
 
 4. **After the widget is already loaded:** Detective / Hub clicks re-read `window.ZeusTraceConfig.hubBaseUrl` (or `hub_url`). Confirm with:
 
@@ -274,7 +285,7 @@ Hostname `http://hub` is a valid origin (it is not treated as a `/hub` path). Wh
 | Environment | Typical `hubBaseUrl` |
 |-------------|----------------------|
 | Local Hub admin | `http://127.0.0.1:9091` |
-| Lab / hosts file | `http://zeus-dev.local:9091` |
+| Lab / hosts file | `http://hub.example:9091` |
 | Demo placeholder | `http://hub` (see `examples/embed.html`) |
 
 Do **not** point `hubBaseUrl` at the public API port (often `:8080`) unless Hub is actually served there — Detective routes live on the Hub origin.
@@ -391,7 +402,7 @@ See `examples/embed.html` for legacy and v2.3.0 fixtures.
 | `npm test` | Run unit tests once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
-| `npm run publish:cdn` | Upload `dist/` to DO Spaces + ensure CDN (`scripts/upload_dist_cdn.sh`) |
+| `npm run publish:cdn` | Upload `dist/` to DigitalOcean Spaces using `DO_SPACES_*` from `.env` (`scripts/upload_dist_cdn.sh`) |
 
 ### Project layout
 
@@ -411,7 +422,8 @@ sketches/
 dist/
   zeus_client_chat_trace.js   Built bundle (commit or deploy this)
 scripts/
-  upload_dist_cdn.sh          Publish dist/ to Spaces CDN (versioned + latest)
+  upload_dist_cdn.sh          Publish dist/ to Spaces CDN (reads `.env`)
+.env.example                  Sample widget + CDN variables (copy to `.env`)
 dev/
   index.html        Local-only full-page playground (`npm start` → http://localhost:5199/)
 examples/
@@ -432,6 +444,11 @@ examples/
 | Playground 404 / no inspector | `npm start` not running, or port taken | `npm start` then open http://localhost:5199/; `PORT=5200 npm start` if 5199 is busy |
 | Early `appendTraceCard` calls lost | Custom stub overwrote the queue | Use the built bundle as-is; it installs the queue before mount |
 | Detective link hidden or wrong | Missing `hubBaseUrl` / `session_id`, wrong Hub origin, or stale bundle still on `/hub/debug/req/...` | Set `hubBaseUrl` (see [Hub base URL](#hub-base-url-hubbaseurl--detective-link)); ensure payload includes `session_id`; reload after config change; rebuild/sync widget |
+| `npm run publish:cdn` exits with `DO_SPACES_KEY: Set DO_SPACES_KEY in .env` (or the same for secret, bucket, or region) | `.env` is missing that variable, or a shell export set it to empty | Fill `DO_SPACES_KEY`, `DO_SPACES_SECRET`, `DO_SPACES_STATIC_BUCKET`, and `DO_SPACES_STATIC_REGION` in `.env` |
+
+## License
+
+BSD-3-Clause — see [LICENSE](LICENSE). Copyright (c) 2026, Koten AI.
 
 ## Docs
 
@@ -439,4 +456,3 @@ examples/
 - Local playground: [`.grok/guides/LOCAL_DEV_PLAYGROUND.md`](.grok/guides/LOCAL_DEV_PLAYGROUND.md)
 - v1 inspector: [`.grok/guides/V1_INSPECTOR.md`](.grok/guides/V1_INSPECTOR.md)
 - Mockup: [`sketches/v1-overlay-inspector/`](sketches/v1-overlay-inspector/)
-- Jira: [ZC-31](https://kotenai.atlassian.net/browse/ZC-31)

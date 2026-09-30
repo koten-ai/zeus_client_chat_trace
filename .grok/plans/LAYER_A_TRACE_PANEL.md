@@ -8,7 +8,7 @@
 ## 1. Context & Requirements
 - **Goal**: When `appendTraceCard` receives a response with Layer A (base-5 terminate bag), show `summary`, `confidence`, `policy_action`, `query_decomposition`, `decomposition` (including nested `predicates` and `output`) on the card without digging into Raw turn bundle.
 - **Constraints**: Vanilla JS widget; Shadow DOM + existing DaisyUI/widget.css patterns; harvest from multiple payload shapes (top-level `layer_a`, `structured_response.layer_a`, return/pipeline steps).
-- **Assumptions**: Hosts (e.g. demo_yelp) pass the search response JSON to `appendTraceCard`; Layer A may only live on `trace.steps` return/pipeline args.
+- **Assumptions**: Hosts (e.g. a host app) pass the search response JSON to `appendTraceCard`; Layer A may only live on `trace.steps` return/pipeline args.
 - **Out of Scope**: Changing Zeus/Detective server paths; rewriting host peeling of user-facing answers.
 
 ## 2. Analysis & Research

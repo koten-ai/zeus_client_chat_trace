@@ -8,8 +8,8 @@
 ## 1. Context & Requirements
 - **Goal**: Public CDN serves the Hub-origin fix. Versioned URL is new (`1.1.1`); `latest` pointer is updated and purged. Git commit records the change.
 - **Constraints**: `1.1.0` is already published with `Cache-Control: public, max-age=31536000, immutable`. Do not treat overwriting `1.1.0/` as the ship path.
-- **Assumptions**: `.secrets/spaces-static.env` has `DO_SPACES_KEY` / `DO_SPACES_SECRET`. Production build is minified (`npm run build`).
-- **Out of Scope**: Vendoring into `demo_travel_sample`; git tag; npm registry.
+- **Assumptions**: `.env` has `DO_SPACES_KEY` / `DO_SPACES_SECRET`. Production build is minified (`npm run build`).
+- **Out of Scope**: Vendoring into `the sample host`; git tag; npm registry.
 
 ## 2. Analysis & Research
 - Key files: `package.json` (1.1.0), `scripts/upload_dist_cdn.sh`, `.secrets/cdn-urls.env` (`TRACE_CDN_VERSION=1.1.0`)

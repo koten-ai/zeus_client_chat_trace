@@ -27,12 +27,14 @@
 ## 3. Setup
 - **Prerequisites**: Node.js 18+, npm
 - **Environment variables**:
+  - Copy `.env.example` to `.env` when you want build defaults. The playground does not need the `DO_SPACES_*` publish variables.
   - `PORT` — optional; static server port (default `5199`)
-  - `ZEUS_API_URL` / `ZEUS_AUTH_TOKEN` / `HUB_BASE_URL` — optional build-time widget defaults (playground still sets local URLs in `ZeusTraceConfig`; Detective/Hub clicks honor that config)
+  - `ZEUS_API_URL` / `ZEUS_AUTH_TOKEN` / `HUB_BASE_URL` — optional. `npm start` inlines them via `esbuild.config.mjs`. The page still sets `ZeusTraceConfig` in `dev/index.html`, and that runtime config wins for API URL, token, and Hub clicks.
 - **Install / bootstrap steps**:
   1. `npm install`
-  2. `npm start`
-  3. Open http://localhost:5199/
+  2. `cp .env.example .env` when build defaults are needed
+  3. `npm start`
+  4. Open http://localhost:5199/
 - **Configuration**: Overlay vs docked is the `mount` query param. Hub/API URLs are set in `dev/index.html`.
 - **Verification**: Lightning inspector fills the page with the v2.3.0 IPA fixture; fixture buttons append more turns.
 
@@ -48,7 +50,7 @@
   - Host-page demo: http://localhost:5199/examples/embed.html
   - Serve without watch: `npm run build && npm run serve`
 - **Edge cases**: Paste must be an object with `trace` or `debug`. Overlay mode hides `#trace-slot` and uses the floating toggle.
-- **Limitations**: No automatic browser reload. Page is local-only (`npm run publish:cdn` uploads `dist/` only). TravelPlan does not use this playground; it vendors `dist/` via `../demo_travel_sample/scripts/vendor_trace.sh`.
+- **Limitations**: No automatic browser reload. Page is local-only (`npm run publish:cdn` uploads `dist/` only). Host apps that vendor `dist/` do not use this playground.
 
 ## 5. Debugging & Known Issues
 - **Common symptoms → causes → fixes**:
@@ -83,5 +85,6 @@
 ## 7. Changelog
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-09-30 | Grok | Playground setup points at `.env` / `.env.example`. `DO_SPACES_*` are for publish only; runtime `ZeusTraceConfig` still wins in `dev/index.html` |
 | 2026-08-25 | Grok | Tracer UI: unclosed `.vbar-col .n` nested all inspector CSS; docked host `display:block` |
 | 2026-08-25 | Grok | Initial local playground (`npm start` → http://localhost:5199/). Bootstrap assigns `ZeusTrace` before mount so Clear/export attach. |

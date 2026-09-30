@@ -12,12 +12,12 @@
 - **Out of Scope**: Runtime toggle UI without reload; gating script download on the host (optional later).
 
 ## 2. Analysis & Research
-- Key files explored: `src/bootstrap.js`, `src/config.js`, `src/config.test.js`, `examples/embed.html`, `demo_yelp/frontend/src/lib/trace.ts`
+- Key files explored: `src/bootstrap.js`, `src/config.js`, `src/config.test.js`, `examples/embed.html`, `the host trace module`
 - Potential risks/edge cases:
   - Silent no-op looks broken → document kill switch + expose `config.enabled`
   - Exact `toEqual` config tests break → update expectations
   - Local embed demo without `?debug=` → set `enabled: true` in demo config
-- Alternatives considered: Host-only gate in demo_yelp (weaker; every host reimplements) vs widget-owned (chosen).
+- Alternatives considered: Host-only gate in a host app (weaker; every host reimplements) vs widget-owned (chosen).
 
 ## 3. Step-by-Step Implementation Plan
 1. **Config: parse enabled + debug query**  

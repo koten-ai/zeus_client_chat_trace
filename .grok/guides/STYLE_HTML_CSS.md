@@ -697,8 +697,7 @@ for the 4.12.10 `<link>` and confirm the host CSP allows jsdelivr.
 
 ## See Also
 
-- Source (sample app): `../zeus_client/.grok/guides/STYLE_HTML_CSS.md`
-- Visual spec: `../zeus_client/sketches/007-traces-detective/`, `../zeus_client/sketches/008-traces-light/`, `../zeus_client/sketches/009-turn-dropdown/`
+- This guide is the style spec for the widget.
 - Current overlay mock (v1 IA, **superseded** by this guide): `sketches/v1-overlay-inspector/`
 - Feature guides: [EMBEDDABLE_TRACE_WIDGET.md](EMBEDDABLE_TRACE_WIDGET.md), [V1_INSPECTOR.md](V1_INSPECTOR.md)
 - Plan: `.grok/plans/TURN_DROPDOWN.md` (chrome); `.grok/plans/TURN_DROPDOWN_ZINDEX.md` (menu stacking); `.grok/plans/WIDGET_STACKING_SPACING.md` (active row + title inset); `.grok/plans/WIDGET_STYLE_HTML_CSS.md`

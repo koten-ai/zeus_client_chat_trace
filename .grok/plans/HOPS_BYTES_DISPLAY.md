@@ -12,7 +12,7 @@
 - **Out of Scope**: Changing Python `hop_rec` (follow-up). Token stats. Hub Detective payloads.
 
 ## 2. Analysis & Research
-- Key files explored: `src/normalize.js`, `src/helpers.js`, `src/panel.js`, `src/normalize.test.js`, `examples/embed.html`, `dev/index.html`, `../zeus_client_python/src/zeus_client/application/agent_turn.py`, `../zeus_client_python/src_v1_legacy/zeus_client/agent/tool_round.py`
+- Key files explored: `src/normalize.js`, `src/helpers.js`, `src/panel.js`, `src/normalize.test.js`, `examples/embed.html`, `dev/index.html`, `src/zeus_client/application/agent_turn.py`, `src_v1_legacy/zeus_client/agent/tool_round.py`
 - Potential risks/edge cases:
   - `result_size` is **row count**, not bytes → never map it to `Bytes`
   - `hops[]` present without `bytes` shadows `steps[].bytes` → match tool steps by `req_id` then verb

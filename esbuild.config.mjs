@@ -14,6 +14,7 @@ function loadEnvFile(path) {
   return vars;
 }
 
+// Only these three keys are inlined. Other .env entries (CDN credentials) stay out of the bundle.
 const envFile = loadEnvFile(".env");
 const zeusApiUrl = process.env.ZEUS_API_URL || envFile.ZEUS_API_URL || "";
 const zeusAuthToken = process.env.ZEUS_AUTH_TOKEN || envFile.ZEUS_AUTH_TOKEN || "";

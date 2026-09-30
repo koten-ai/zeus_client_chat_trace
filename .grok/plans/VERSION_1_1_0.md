@@ -9,7 +9,7 @@
 - **Goal**: `package.json`, baked `__WIDGET_VERSION__`, and CDN objects report **1.1.0**.
 - **Constraints**: Versioned CDN keys are immutable; publish a new `1.1.0/` prefix and update `latest`. Do not rewrite npm dependency versions in the lockfile.
 - **Assumptions**: User wants 1.1.0 instead of the 1.0.1 just shipped. Spaces credentials still valid.
-- **Out of Scope**: Vendoring into `demo_travel_sample` (still pinned at 1.0.0). Git tag.
+- **Out of Scope**: Vendoring into `the sample host` (still pinned at 1.0.0). Git tag.
 
 ## 2. Analysis & Research
 - Key files: `package.json`, `package-lock.json` (root), `README.md`, `esbuild.config.mjs` (`__WIDGET_VERSION__`), `scripts/upload_dist_cdn.sh`

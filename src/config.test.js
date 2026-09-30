@@ -216,8 +216,8 @@ describe("normalizeHubBase", () => {
   });
 
   it("strips workbench hash and /hub path to origin", () => {
-    expect(normalizeHubBase("http://zeus-dev.local:9091/hub/#/workbench")).toBe(
-      "http://zeus-dev.local:9091"
+    expect(normalizeHubBase("http://hub.example:9091/hub/#/workbench")).toBe(
+      "http://hub.example:9091"
     );
     expect(normalizeHubBase("http://127.0.0.1:9091/hub")).toBe("http://127.0.0.1:9091");
   });
@@ -239,8 +239,8 @@ describe("hub debug URLs", () => {
 
   it("rebuilds Detective req URL from a workbench base", () => {
     expect(
-      hubDebugReqUrl("http://zeus-dev.local:9091/hub/#/workbench", "abc")
-    ).toBe("http://zeus-dev.local:9091/hub/#/debug/req/abc");
+      hubDebugReqUrl("http://hub.example:9091/hub/#/workbench", "abc")
+    ).toBe("http://hub.example:9091/hub/#/debug/req/abc");
   });
 });
 

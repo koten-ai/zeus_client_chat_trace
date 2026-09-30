@@ -7,7 +7,7 @@
 
 ## 1. Context & Requirements
 
-- **Goal**: Ship `zeus_client_chat_trace@1.0.0` as the embeddable Zeus tracer. Interior UI matches the sample-app inspector already live in `zeus_client` (sketches hybrid 001 chrome + 003 diagnosis strip + 002 Story on Timeline + 004 units rail). Payload handling matches `zeus_client_python` 2.3.0 `TurnResult.debug` / `public_trace` / detective. A **static HTML mockup** of the overlay widget is reviewed and locked **before any production JS/CSS rewrite**.
+- **Goal**: Ship `zeus_client_chat_trace@1.0.0` as the embeddable Zeus tracer. Interior UI matches the sample-app inspector already live in `zeus_client` (sketches hybrid 001 chrome + 003 diagnosis strip + 002 Story on Timeline + 004 units rail). Payload handling matches `the Python client` 2.3.0 `TurnResult.debug` / `public_trace` / detective. A **static HTML mockup** of the overlay widget is reviewed and locked **before any production JS/CSS rewrite**.
 - **Constraints**:
   - Keep the embed contract: one IIFE bundle, Shadow DOM, kill switch (`?debug=true` / `enabled`), early-call queue, `appendTraceCard` / `openDebugPanel` / `ZeusTrace.ready`.
   - Widget remains a **passive observer** — hosts call Zeus; widget only renders.
@@ -21,7 +21,7 @@
   - Hosts today pass `{ question, answer, session_id, trace }`. V2 BFFs (sample app `python3/turn_mapper.trace_payload`) already merge `debug.public_trace` + `detective` + `hops` + gather fields into `trace`.
   - Python 2.3.0 `build_public_trace` does **not** emit `spans` / `ai_requests` / `ai_responses`. The widget must synthesize those from `steps` + `hops` the same way `zeus_client` helpers do.
 - **Out of Scope**:
-  - Changes to `zeus_client_python` projectors or Detective builders.
+  - Changes to `the Python client` projectors or Detective builders.
   - Replacing the sample app’s in-tree `trace_panel.js` in this cut (follow-up: vendor v1.0 docked mode).
   - Playwright / visual-regression CI.
   - Claiming MATRIX `semantic_cache=supported` or `multi_agent=demo`.
@@ -44,15 +44,15 @@
 |------|------|
 | `src/widget.html`, `src/widget.css`, `src/trace.js` | Current stacked-card overlay (v0.1.13) |
 | `src/bootstrap.js`, `src/config.js` | Shadow DOM mount, kill switch, Detective URL |
-| `../zeus_client/static/trace_panel.js` (~1814 lines) | Shipped inspector: list + tabs + diagnosis + job rail |
-| `../zeus_client/static/trace_helpers.js` (~1146 lines) | Metrics, waterfall, hops, jsnview, gather extract |
-| `../zeus_client/templates/index.html` (~L309–356) | Inspector DOM: `#tt-panel` header / session / body / tabs |
-| `../zeus_client/static/app.css` (`.tt-*` from ~L628) | Dark inspector tokens + layout |
-| `../zeus_client/sketches/README.md` | Locked hybrid: 001 + 003 strip + 002 Story |
-| `../zeus_client/python3/turn_mapper.py` | `trace_payload(TurnResult)` — the wire format hosts should send |
-| `../zeus_client_python/src/zeus_client/domain/messages.py` | `TurnResult` / `DebugBundle` |
-| `../zeus_client_python/src/zeus_client/application/projectors/public_trace.py` | Widget-facing `public_trace` keys |
-| `../zeus_client_python/CHANGELOG.md` | 2.3.0 semantic cache; 2.2.0 stamps / tokens / object triggers |
+| `static/trace_panel.js` (~1814 lines) | Shipped inspector: list + tabs + diagnosis + job rail |
+| `static/trace_helpers.js` (~1146 lines) | Metrics, waterfall, hops, jsnview, gather extract |
+| `templates/index.html` (~L309–356) | Inspector DOM: `#tt-panel` header / session / body / tabs |
+| `static/app.css` (`.tt-*` from ~L628) | Dark inspector tokens + layout |
+| `sketches/README.md` | Locked hybrid: 001 + 003 strip + 002 Story |
+| `python3/turn_mapper.py` | `trace_payload(TurnResult)` — the wire format hosts should send |
+| `src/zeus_client/domain/messages.py` | `TurnResult` / `DebugBundle` |
+| `src/zeus_client/application/projectors/public_trace.py` | Widget-facing `public_trace` keys |
+| `CHANGELOG.md` | 2.3.0 semantic cache; 2.2.0 stamps / tokens / object triggers |
 
 ### Gap: current widget vs sample-app inspector
 
@@ -294,4 +294,4 @@ Ask only if you want a different default:
 - After ship, write `.grok/guides/V1_INSPECTOR.md` using the AGENTS.md guide template and rewrite `EMBEDDABLE_TRACE_WIDGET.md` section 2 to the inspector flow.
 - Port, don’t rewrite: `trace_panel.js` + `trace_helpers.js` are the behavior oracle; adapt queries to the shadow `root`.
 - Do not generate production CSS/JS until `sketches/v1-overlay-inspector/index.html` exists and matches the wireframe above.
-- Do not edit `zeus_client` or `zeus_client_python` in this workstream.
+- Do not edit `zeus_client` or `the Python client` in this workstream.

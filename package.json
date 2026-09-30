@@ -3,6 +3,7 @@
   "version": "1.2.3",
   "private": true,
   "description": "Embeddable Zeus trace debugger widget",
+  "license": "BSD-3-Clause",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "start": "node scripts/dev.mjs",

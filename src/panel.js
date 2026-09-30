@@ -1,7 +1,6 @@
 /**
  * Turn traces inspector panel (DaisyUI Detective IA).
- * Ported from zeus_client/static/trace_panel.js — queries scoped to a root
- * (Shadow DOM overlay or docked host).
+ * Queries are scoped to a root (Shadow DOM overlay or docked host).
  */
 import * as helpers from "./helpers.js";
 import { coerceTraceEntry, normalizeTurnEntry } from "./normalize.js";

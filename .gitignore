@@ -5,5 +5,9 @@ terminals/
 node_modules/
 dist/
 .env
-# local Spaces/CDN credentials
+.env.*
+!.env.example
+# local Spaces/CDN credentials — never commit a filled copy
 .secrets/
+spaces-static.env
+**/spaces-static.env

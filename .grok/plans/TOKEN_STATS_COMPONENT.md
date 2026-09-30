@@ -19,7 +19,7 @@
 1. Extend `traceMetrics` for tokensIn/tokensOut + flags; derive total from in+out when needed
 2. Add `tokensStatsHTML` DaisyUI markup; wire into metrics row + TOTAL
 3. CSS `.mm-token-stats` compact layout
-4. Tests + docs + build + demo_yelp sync
+4. Tests + docs + build + a host app sync
 
 ## 4. Verification & Rollback
 - **Tests**: `npm test` (token stats cases) + `npm run build`

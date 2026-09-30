@@ -57,27 +57,39 @@ npm install
 npm run build
 ```
 
-**CDN publish** (DigitalOcean Spaces `koten-static-cdn` / nyc3):
+**Environment** — one gitignored file, `.env`, copied from `.env.example`:
 
 ```bash
-# credentials: DO_SPACES_KEY + DO_SPACES_SECRET
-# (optional template: scripts/spaces-static.env.example → .secrets/spaces-static.env)
+cp .env.example .env
+```
+
+`npm run build` and `npm start` inline only `ZEUS_API_URL`, `ZEUS_AUTH_TOKEN`, and `HUB_BASE_URL`. `npm run publish:cdn` reads the Spaces variables from the same file and does not inline them. A non-empty shell export overrides `.env`. `window.ZeusTraceConfig` overrides the three inlined values at runtime.
+
+| Variable | Required | Used by | Description |
+|----------|----------|---------|-------------|
+| `ZEUS_API_URL` | No | build | Default Zeus API base URL |
+| `ZEUS_AUTH_TOKEN` | No | build | Default Bearer token. Inlined when set |
+| `HUB_BASE_URL` | No | build | Default Hub / Detective origin. Leave empty on a CDN build |
+| `DO_SPACES_KEY` | To publish | `publish:cdn` | Spaces access key |
+| `DO_SPACES_SECRET` | To publish | `publish:cdn` | Spaces secret |
+| `DO_SPACES_STATIC_BUCKET` | To publish | `publish:cdn` | Destination Space. No default |
+| `DO_SPACES_STATIC_REGION` | To publish | `publish:cdn` | Space region. No default |
+| `DO_SPACES_STATIC_ENDPOINT` | No | `publish:cdn` | Default `https://<region>.digitaloceanspaces.com` |
+| `DO_SPACES_STATIC_PREFIX` | No | `publish:cdn` | Object prefix. Default `zeus_client_chat_trace` |
+| `DIGITALOCEAN_TOKEN` | No | `publish:cdn` | Optional CDN-endpoint API token |
+
+**CDN publish** (DigitalOcean Spaces; bucket and region come from `.env`):
+
+```bash
 npm run publish:cdn
 ```
 
 | Path | URL |
 |------|-----|
-| Versioned (v0.1.6+) | `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js` |
-| Latest pointer | `https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/latest/zeus_client_chat_trace.js` |
+| Versioned (v0.1.6+) | `https://<cdn-host>/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js` |
+| Latest pointer | `https://<cdn-host>/zeus_client_chat_trace/latest/zeus_client_chat_trace.js` |
 
-Prefer the **versioned** URL in production embeds (immutable cache). Use `latest` only for demos.
-
-**Environment variables** (build-time defaults, optional):
-- `ZEUS_API_URL` — default Zeus API base URL
-- `ZEUS_AUTH_TOKEN` — default Bearer token
-- `HUB_BASE_URL` — default Hub / Detective origin (runtime `ZeusTraceConfig.hubBaseUrl` still wins)
-
-Copy `.env.example` to `.env` for local builds.
+Prefer the **versioned** URL in production embeds (immutable cache). Use `latest` only for demos. A successful publish writes `.secrets/cdn-urls.env` (gitignored output, not an input). Full steps: `README.md` § Environment.
 
 **Runtime config** (overrides build defaults):
 
@@ -86,12 +98,12 @@ Copy `.env.example` to `.env` for local builds.
   window.ZeusTraceConfig = {
     zeusApiUrl: "https://zeus.example.com",
     zeusAuthToken: "optional-bearer-token",
-    hubBaseUrl: "http://zeus-dev.local:9091",
+    hubBaseUrl: "http://hub.example:9091",
     // enabled: true,  // or use ?debug=true on the host URL
   };
 </script>
 <script
-  src="https://koten-static-cdn.nyc3.cdn.digitaloceanspaces.com/zeus_client_chat_trace/0.1.9/zeus_client_chat_trace.js"
+  src="https://<cdn-host>/zeus_client_chat_trace/<version>/zeus_client_chat_trace.js"
   async
 ></script>
 ```
@@ -103,9 +115,9 @@ Or via script data attributes: `data-zeus-api-url`, `data-zeus-auth-token`, `dat
 | How | Example |
 |-----|---------|
 | `window.ZeusTraceConfig.hubBaseUrl` (or `hub_url`) | `"http://127.0.0.1:9091"` |
-| Script `data-hub-base-url` | `data-hub-base-url="http://zeus-dev.local:9091"` |
+| Script `data-hub-base-url` | `data-hub-base-url="http://hub.example:9091"` |
 | `.env` `HUB_BASE_URL` (build-time fallback) | `HUB_BASE_URL=http://127.0.0.1:9091` |
-| Host build env (e.g. demo_yelp) | `VITE_HUB_BASE_URL=…` → host injects `ZeusTraceConfig` |
+| Host build env (e.g. a host app) | `VITE_HUB_BASE_URL=…` → host injects `ZeusTraceConfig` |
 
 Resolution: window config → `data-hub-base-url` → `HUB_BASE_URL` → `""`. Empty → no tab opened. Session links: `{hubBaseUrl}/hub/debug/session/{session_id}`. Req / Detective ↗ / Open in Hub: `{hubBaseUrl}/hub/#/debug/req/{req_id}`. Clicks re-read live `ZeusTraceConfig`. Hostname `http://hub` is kept (not stripped as a `/hub` path). Verify: `window.ZeusTrace.config.hubBaseUrl`. Full steps: `README.md` § Hub base URL.
 
@@ -211,28 +223,31 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 
 ## 6. Related Artifacts
 - **Files**: `src/widget.html`, `src/widget.css`, `src/bootstrap.js`, `src/trace.js`, `src/panel.js`, `src/normalize.js`, `src/helpers.js`, `src/config.js`, `sketches/v1-overlay-inspector/`, `dev/index.html`, `examples/embed.html`, `dist/zeus_client_chat_trace.js`
-- **CDN**: Space `koten-static-cdn` (nyc3) → `*.cdn.digitaloceanspaces.com`; publish via `npm run publish:cdn`
+- **Environment**: `.env.example` → `.env`. Build inlines `ZEUS_API_URL`, `ZEUS_AUTH_TOKEN`, `HUB_BASE_URL`. Publish reads `DO_SPACES_*` from the same file.
+- **CDN**: `npm run publish:cdn` uploads to the Space named by `DO_SPACES_STATIC_BUCKET` and `DO_SPACES_STATIC_REGION`
 - **Tickets**:
-  - [ZC-31](https://kotenai.atlassian.net/browse/ZC-31) — embeddable widget
-  - [ZC-43](https://kotenai.atlassian.net/browse/ZC-43) — original request-id Detective link (superseded path by session link)
+  - ZC-31 — embeddable widget
+  - ZC-43 — original request-id Detective link (superseded path by session link)
 - **Plans**: `.grok/plans/WIDGET_STYLE_HTML_CSS.md` (chrome); `.grok/plans/1_V1_INSPECTOR_REDESIGN.md` (ingest)
 
 ## 7. Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-09-30 | Grok | Document the single `.env`: widget build keys, CDN publish keys, optional endpoint/prefix/token, and `.secrets/cdn-urls.env` as publish output |
+| 2026-09-30 | Grok | Removed production CDN coordinates, lab hostnames, tracker links, and private repository paths from docs and the publish script |
 | 2026-09-08 | Grok | Package **1.2.3**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.3` (Turn traces UI detail: copy-id, nested diagnosis cards, shadow layout) |
 | 2026-09-04 | Grok | Package **1.2.2**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.2` (active-row stacking + title inset) |
 | 2026-09-03 | Grok | Open turn dropdown stacks above the tab strip (`widget.css` z-index, not HTML `z-[50]`) |
 | 2026-09-03 | Grok | Package **1.2.1**; CDN versioned + latest; pin TravelPlan `/static/zeus_client_chat_trace.js?v=1.2.1` |
 | 2026-09-03 | Grok | Turn picker is a DaisyUI dropdown above tabs (sketch 009); left-pane search/filter rail removed |
-| 2026-09-02 | Grok | Package **1.2.0**; pin into sibling `demo_travel_sample` (`/static/zeus_client_chat_trace.js?v=1.2.0`) |
+| 2026-09-02 | Grok | Package **1.2.0**; pin into sibling `the sample host` (`/static/zeus_client_chat_trace.js?v=1.2.0`) |
 | 2026-09-02 | Grok | DaisyUI 4.12 light Detective IA in Shadow DOM; title **Turn traces**; tabs Overview→Raw; chrome spec `STYLE_HTML_CSS.md` |
 | 2026-08-26 | Grok | Detective / Hub redirects use live `hubBaseUrl` from config; `http://hub` hostname no longer mangled; optional `.env` `HUB_BASE_URL` |
 | 2026-08-26 | Grok | Package / CDN version **1.1.1** (versioned + `latest`) |
 | 2026-08-25 | Grok | Hops `Bytes` column: aliases + matching step + payload estimate (2.3.0 hops omit `bytes`) |
 | 2026-08-25 | Grok | Raw tab JSON viewer font matches inspector `--tt-mono` 11px |
-| 2026-08-25 | Grok | Pin 1.0.0 into `demo_travel_sample` (vendored `/static/…?v=1.0.0`, not CDN latest) |
+| 2026-08-25 | Grok | Pin 1.0.0 into `the sample host` (vendored `/static/…?v=1.0.0`, not CDN latest) |
 | 2026-08-25 | Grok | Fix tracer UI: unclosed `.vbar-col .n` nested all `.tt-*` CSS; `[hidden]` honor; docked `display:block` |
 | 2026-08-25 | Grok | Local playground: `npm start` → http://localhost:5199/ |
 | 2026-08-25 | Grok | Click-to-copy: Shadow DOM–safe clipboard (sync execCommand + Clipboard API); in-panel toast |
@@ -254,7 +269,7 @@ Missing catalog (fast-tier / stripped payloads) → inject tiles **No**, Edges *
 | 2026-08-05 | agent | Layer A as DaisyUI stats cards (Confidence / Policy / Intent / Output + Summary + QD/decomp rows) for scannability |
 | 2026-08-05 | agent | Layer A terminate panel: summary, confidence, policy_action, query_decomposition, decomposition (targets / predicates / output); harvest from layer_a / structured_response / return/pipeline steps |
 | 2026-08-05 | agent | Document how to set/change `hubBaseUrl` (runtime only; not package `.env`); README § Hub base URL |
-| 2026-08-05 | agent | Publish `dist/` to DO Spaces CDN (`koten-static-cdn`): versioned + `latest` paths; `npm run publish:cdn` |
+| 2026-08-05 | agent | Publish `dist/` to DO Spaces CDN (`the configured Space`): versioned + `latest` paths; `npm run publish:cdn` |
 | 2026-08-04 | agent | Head KPI mini grid under `trace-card-head`: MINI-SCHEMA, SCOPE BRIEF, LLM Rounds, Tool Calls, Avg / round, Edges |
 | 2026-08-04 | agent | Kill switch: default off; show with `?debug=true` or `enabled`/`data-enabled` (v0.1.4) |
 | 2026-08-03 | agent | Detective deep-link uses `/hub/debug/session/{session_id}`; panel title fixed as `Zeus Tracer` |
